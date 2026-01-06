@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addons>
+<addon id="plugin.video.awilime" name="Awilime.com" version="1.0.1" provider-name="ZiDERViSiON">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.beautifulsoup4" version="4.6.2"/>
+        <import addon="script.module.requests" version="2.22.0"/>
+        
+        <import addon="plugin.video.youtube" version="7.0.0"/>
+        
+        </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu">Awilime műsorújság és előzetesek</summary>
+        <description lang="hu">Böngéssz az awilime.com tematikus műsorai között, és nézd meg a filmek előzetesét közvetlenül a YouTube-on!</description>
+        <language>hu</language>
+        <platform>all</platform>
+        <license>GPL-2.0-only</license>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+        <news>
+1.0.1 - Színezett lista, csatorna nevek és javított trailer keresés.
+        </news>
+    </extension>
+</addon>
+
+<addon id="plugin.video.filmezzmozi" name="FilmezzMozi" version="1.0.0" provider-name="Saját">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.resolveurl" version="5.0.00"/>
+        <import addon="script.module.requests" version="2.25.1"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu">FilmezzMozi Kodi Addon</summary>
+        <description lang="hu">Online filmek megtekintése a filmezzmozi.do.am oldalról.</description>
+        <platform>all</platform>
+    </extension>
+</addon>
+
+<addon id="plugin.video.ingyenpornotv" name="IngyenPorno.TV" version="1.0.0" provider-name="TeNeved">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.0.0"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu">IngyenPorno.TV Video Addon</summary>
+        <description lang="hu">Böngéssz és nézz videókat az ingyenporno.tv oldalról.</description>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>
+
+<addon id="plugin.video.napiszar"
+       name="Napiszar Videó Addon"
+       version="1.0.0"
+       provider-name="ZiDERViSiON">
+<requires>
+	<import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests"/>
+	<import addon="script.module.resolveurl"/>
+	<import addon="script.module.beautifulsoup4"/>
+	<import addon="plugin.video.youtube"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+    <extension point="xbmc.gui.window" library="default.xml"/>
+        <summary lang="hu">Napiszar Videó Kiegészítő</summary>
+        <description lang="hu">Napiszar.biz videóinak böngészése és lejátszása Kodi-ban.</description>
+        <platform>all</platform>
+        <assets>
+            <icon>resources/icon.png</icon>
+            <fanart>resources/fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>
+
+<addon id="plugin.video.napiszex" name="Napiszex" version="1.0.0" provider-name="TeNeved">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.resolveurl" version="5.0.0"/>
+        <import addon="script.module.requests" version="2.0.0"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en">Napiszex Video Addon</summary>
+        <description lang="en">Browse and watch videos from napiszex.com using ResolveURL.</description>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>
+
+<addon id="plugin.video.porno1" name="Porno1.hu" version="1.0.0" provider-name="TeNeved">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.0.0"/>
+	<import addon="script.module.beautifulsoup4" version="4.6.3"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu">Porno1.hu Video Addon</summary>
+        <description lang="hu">Böngéssz és nézz videókat a porno1.hu oldalról.</description>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>
+
+<addon id="plugin.video.pornovegas" name="Porno.Vegas" version="1.0.0" provider-name="TeNeved">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.0.0"/>
+	<import addon="script.module.beautifulsoup4" version="4.6.3"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu">Porno.Vegas Video Addon</summary>
+        <description lang="hu">Böngéssz és nézz videókat a porno.vegas oldalról.</description>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>
+
+</addons>
