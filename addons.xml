@@ -28,7 +28,22 @@
     </extension>
 </addon>
 
-<addon id="plugin.video.filmezzmozi" name="FilmezzMozi" version="1.0.0" provider-name="Saját">
+<addon id="plugin.video.darkmoovie" name="DarkMoovie" version="1.0.0" provider-name="ZiDERViSiON">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.25.1"/>
+        <import addon="script.module.resolveurl"/> </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu">DarkMoovie online filmek</summary>
+        <description lang="hu">Filmek és sorozatok a moovie.do.am oldalról.</description>
+        <platform>all</platform>
+    </extension>
+</addon>
+
+<addon id="plugin.video.filmezzmozi" name="FilmezzMozi" version="1.0.0" provider-name="ZiDERViSiON">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.resolveurl" version="5.0.00"/>
@@ -44,7 +59,7 @@
     </extension>
 </addon>
 
-<addon id="plugin.video.ingyenpornotv" name="IngyenPorno.TV" version="1.0.0" provider-name="TeNeved">
+<addon id="plugin.video.ingyenpornotv" name="IngyenPorno.TV" version="1.0.0" provider-name="ZiDERViSiON">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.0.0"/>
@@ -59,6 +74,27 @@
         <assets>
             <icon>icon.png</icon>
             <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>
+
+<addon id="plugin.video.musor.tv" name="Műsor.tv" version="1.0.1" provider-name="ZiDERViSiON">
+    <requires>
+        <import addon="script.module.beautifulsoup4" version="4.6.2"/>
+        <import addon="script.module.requests" version="2.22.0"/>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="plugin.video.youtube"/>
+        <import addon="plugin.video.stb_hu"/> </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en">Műsor.tv műsorújság és kereső</summary>
+        <description lang="hu">Nézd meg a műsorújságot és keress rá a filmekre az stb.hu-n!</description>
+        <language>hu</language>
+        <platform>all</platform>
+        <assets>
+          <icon>icon.png</icon>
         </assets>
     </extension>
 </addon>
@@ -89,7 +125,7 @@
     </extension>
 </addon>
 
-<addon id="plugin.video.napiszex" name="Napiszex" version="1.0.0" provider-name="TeNeved">
+<addon id="plugin.video.napiszex" name="Napiszex" version="1.0.0" provider-name="ZiDERViSiON">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.resolveurl" version="5.0.0"/>
@@ -109,7 +145,7 @@
     </extension>
 </addon>
 
-<addon id="plugin.video.porno1" name="Porno1.hu" version="1.0.0" provider-name="TeNeved">
+<addon id="plugin.video.porno1" name="Porno1.hu" version="1.0.0" provider-name="ZiDERViSiON">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.0.0"/>
@@ -129,7 +165,7 @@
     </extension>
 </addon>
 
-<addon id="plugin.video.pornovegas" name="Porno.Vegas" version="1.0.0" provider-name="TeNeved">
+<addon id="plugin.video.pornovegas" name="Porno.Vegas" version="1.0.0" provider-name="ZiDERViSiON">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.0.0"/>
