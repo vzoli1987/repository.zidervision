@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.darkmoovie" name="DarkMoovie" version="1.0.0" provider-name="ZiDERViSiON">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.25.1"/>
+        <import addon="script.module.resolveurl"/> </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu">DarkMoovie online filmek</summary>
+        <description lang="hu">Filmek és sorozatok a moovie.do.am oldalról.</description>
+        <platform>all</platform>
+    </extension>
+</addon>

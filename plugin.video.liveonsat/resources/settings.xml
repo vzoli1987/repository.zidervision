@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="Szűrés és Megjelenítés">
+        <setting id="hide_streams" type="bool" label="Online streamek elrejtése" default="false"/>
+        <setting id="only_fta" type="bool" label="Csak kódolatlan (FTA) adások" default="false"/>
+    </category>
+</settings>
