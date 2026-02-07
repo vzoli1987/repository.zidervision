@@ -5,9 +5,9 @@
     </requires>
     <extension point="xbmc.addon.repository" name="ZiderVision Repository">
         <dir>
-            <info compressed="false">https://raw.githubusercontent.com/vzoli1987/repository.zidervision/main/addons.xml</info>
-            <checksum>https://raw.githubusercontent.com/vzoli1987/repository.zidervision/main/addons.xml.md5</checksum>
-            <datadir zip="true">https://raw.githubusercontent.com/vzoli1987/repository.zidervision/main/</datadir>
+            <info compressed="false">https://vzoli1987.github.io/repository.zidervision/zips/addons.xml</info>
+            <checksum>https://vzoli1987.github.io/repository.zidervision/zips/addons.xml.md5</checksum>
+            <datadir zip="true">https://vzoli1987.github.io/repository.zidervision/zips/</datadir>
         </dir>
     </extension>
     <extension point="xbmc.addon.metadata">
