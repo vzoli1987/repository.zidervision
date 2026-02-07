@@ -226,12 +226,15 @@
 </addon>
 
 <addon id="repository.zidervision" version="1.0.0" name="ZiderVision Repo" provider-name="Zider">
+    <requires>
+        <import addon="xbmc.python" version="3.0.1"/>
+    </requires>
     <extension point="xbmc.addon.repository" name="ZiderVision Repository">
         <dir>
-    <info compressed="false">https://raw.githubusercontent.com/vzoli1987/repository.zidervision/main/addons.xml</info>
-    <checksum>https://raw.githubusercontent.com/vzoli1987/repository.zidervision/main/addons.xml.md5</checksum>
-    <datadir zip="true">https://raw.githubusercontent.com/vzoli1987/repository.zidervision/main/</datadir>
-	</dir>
+            <info compressed="false">https://raw.githubusercontent.com/vzoli1987/repository.zidervision/main/addons.xml</info>
+            <checksum>https://raw.githubusercontent.com/vzoli1987/repository.zidervision/main/addons.xml.md5</checksum>
+            <datadir zip="true">https://raw.githubusercontent.com/vzoli1987/repository.zidervision/main/</datadir>
+        </dir>
     </extension>
     <extension point="xbmc.addon.metadata">
         <summary>ZiderVision kiegészítők</summary>
