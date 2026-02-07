@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.liveonsat" name="LiveOnSat.com" version="1.0.0" provider-name="ZiDERViSiON">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.25.1"/>
+        <import addon="script.module.beautifulsoup4" version="4.6.2"/>
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu_HU">LiveOnSat napi műsor</summary>
+        <description lang="hu_HU">A LiveOnSat.com kinyert mai sportközvetítések listája.</description>
+        <disclaimer lang="hu_HU">Ez a kiegészítő csak információs célokat szolgál.</disclaimer>
+        <language>hu</language>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>

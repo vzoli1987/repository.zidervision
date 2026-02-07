@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.musor.tv" name="Műsor.tv" version="1.0.2" provider-name="ZiDERViSiON">
+    <requires>
+        <import addon="script.module.beautifulsoup4" version="4.6.2"/>
+        <import addon="script.module.requests" version="2.22.0"/>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="plugin.video.youtube"/>
+        <import addon="plugin.video.stb_hu"/> </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en">Műsor.tv műsorújság és kereső</summary>
+        <description lang="hu">Nézd meg a műsorújságot és keress rá a filmekre az stb.hu-n!</description>
+        <language>hu</language>
+        <platform>all</platform>
+        <assets>
+          <icon>icon.png</icon>
+        </assets>
+    </extension>
+</addon>

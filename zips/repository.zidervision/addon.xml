@@ -1,0 +1,17 @@
+<addon id="repository.zidervision" version="1.0.2" name="ZiderVision Repo" provider-name="Zider">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+    </requires>
+    <extension point="xbmc.addon.repository" name="ZiderVision Repository">
+        <dir>
+            <info compressed="false">https://vzoli1987.github.io/repository.zidervision/zips/addons.xml</info>
+            <checksum>https://vzoli1987.github.io/repository.zidervision/zips/addons.xml.md5</checksum>
+            <datadir zip="true">https://vzoli1987.github.io/repository.zidervision/zips/</datadir>
+        </dir>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu">ZiderVision Repository</summary>
+        <description lang="hu">Magyar nyelvű kiegészítők tárolója.</description>
+        <platform>all</platform>
+    </extension>
+</addon>
