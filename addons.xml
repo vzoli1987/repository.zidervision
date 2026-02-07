@@ -237,9 +237,8 @@
         </dir>
     </extension>
     <extension point="xbmc.addon.metadata">
-        <summary>ZiderVision kiegészítők</summary>
-        <description>Magyar nyelvű videós kiegészítők tárolója. A telepítés után elérhetővé válnak a frissítések a pluginokhoz.</description>
-        <disclaimer>A kiegészítők tartalmáért a fejlesztő nem vállal felelősséget.</disclaimer>
+        <summary lang="hu">ZiderVision Repository</summary>
+        <description lang="hu">Magyar nyelvű kiegészítők tárolója. A telepítés után elérhetővé válnak a frissítések.</description>
         <platform>all</platform>
         <assets>
             <icon>icon.png</icon>
