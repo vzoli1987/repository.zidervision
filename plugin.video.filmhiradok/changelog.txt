@@ -1,2 +1,5 @@
 [B]1.0.0[/B]
 - Első verzió
+[B]1.0.1[/B]
+- Korrekt beletekerés javítva, így már nem a komplett videót indítja el :-)
+
