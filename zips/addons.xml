@@ -1,231 +1,246 @@
 <?xml version='1.0' encoding='utf-8'?>
-<addons><addon id="plugin.video.awilime" name="Awilime.com" version="1.0.1" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.beautifulsoup4" version="4.6.2" />
-        <import addon="script.module.requests" version="2.22.0" />
-        
-        <import addon="plugin.video.youtube" version="7.0.0" />
-        
+<addons>
+    <addon id="plugin.video.awilime" name="Awilime.com" version="1.0.1" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.beautifulsoup4" version="4.6.2" />
+            <import addon="script.module.requests" version="2.22.0" />
+            <import addon="plugin.video.youtube" version="7.0.0" />
         </requires>
-    <extension point="xbmc.python.pluginsource" library="default.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">Awilime műsorújság és előzetesek</summary>
-        <description lang="hu">Böngéssz az awilime.com tematikus műsorai között, és nézd meg a filmek előzetesét közvetlenül a YouTube-on!</description>
-        <language>hu</language>
-        <platform>all</platform>
-        <license>GPL-2.0-only</license>
-        <assets>
-            <icon>icon.png</icon>
-            <fanart>fanart.jpg</fanart>
-        </assets>
-        <news>
+        <extension point="xbmc.python.pluginsource" library="default.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">Awilime műsorújság és előzetesek</summary>
+            <description lang="hu">Böngéssz az awilime.com tematikus műsorai között, és nézd meg a filmek előzetesét közvetlenül a YouTube-on!</description>
+            <language>hu</language>
+            <platform>all</platform>
+            <license>GPL-2.0-only</license>
+            <assets>
+                <icon>icon.png</icon>
+                <fanart>fanart.jpg</fanart>
+            </assets>
+            <news>
 1.0.1 - Színezett lista, csatorna nevek és javított trailer keresés.
         </news>
-    </extension>
-</addon><addon id="plugin.video.darkmoovie" name="DarkMoovie" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.requests" version="2.25.1" />
-        <import addon="script.module.resolveurl" /> </requires>
-    <extension point="xbmc.python.pluginsource" library="main.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">DarkMoovie online filmek</summary>
-        <description lang="hu">Filmek és sorozatok a moovie.do.am oldalról.</description>
-        <platform>all</platform>
-    </extension>
-</addon><addon id="plugin.video.filmezzmozi" name="FilmezzMozi" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.resolveurl" version="5.0.00" />
-        <import addon="script.module.requests" version="2.25.1" />
-    </requires>
-    <extension point="xbmc.python.pluginsource" library="main.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">FilmezzMozi Kodi Addon</summary>
-        <description lang="hu">Online filmek megtekintése a filmezzmozi.do.am oldalról.</description>
-        <platform>all</platform>
-    </extension>
-</addon><addon id="plugin.video.filmhiradok" name="Filmhíradók" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.requests" version="2.25.1" />
-	<import addon="script.module.beautifulsoup4" version="4.6.3" />
-        <import addon="script.module.resolveurl" /> </requires>
-    <extension point="xbmc.python.pluginsource" library="main.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">Filmhiradók online</summary>
-        <description lang="hu">Filmhíradók a filmhiradokonline.hu oldalról.</description>
-        <platform>all</platform>
-    </extension>
-</addon><addon id="plugin.video.fuggetlenfilmek" name="Független Filmek" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.requests" version="2.25.1" />
-        <import addon="script.module.beautifulsoup4" version="4.9.3" />
-        <import addon="script.module.resolveurl" version="5.0.00" />
-    </requires>
-    <extension point="xbmc.python.pluginsource" library="main.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">Független magyar filmek adatbázisa</summary>
-        <description lang="hu">Nézz magyar amatőr és független filmeket közvetlenül a Kodiból.</description>
-        <platform>all</platform>
-        <language>hu</language>
-    </extension>
-</addon><addon id="plugin.video.ingyenpornotv" name="IngyenPorno.TV" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.requests" version="2.0.0" />
-    </requires>
-    <extension point="xbmc.python.pluginsource" library="main.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">IngyenPorno.TV Video Addon</summary>
-        <description lang="hu">Böngéssz és nézz videókat az ingyenporno.tv oldalról.</description>
-        <platform>all</platform>
-        <assets>
-            <icon>icon.png</icon>
-            <fanart>fanart.jpg</fanart>
-        </assets>
-    </extension>
-</addon><addon id="plugin.video.liveonsat" name="LiveOnSat.com" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.requests" version="2.25.1" />
-        <import addon="script.module.beautifulsoup4" version="4.6.2" />
-    </requires>
-    <extension point="xbmc.python.pluginsource" library="default.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu_HU">LiveOnSat napi műsor</summary>
-        <description lang="hu_HU">A LiveOnSat.com kinyert mai sportközvetítések listája.</description>
-        <disclaimer lang="hu_HU">Ez a kiegészítő csak információs célokat szolgál.</disclaimer>
-        <language>hu</language>
-        <platform>all</platform>
-        <assets>
-            <icon>icon.png</icon>
-            <fanart>fanart.jpg</fanart>
-        </assets>
-    </extension>
-</addon><addon id="plugin.video.musor.tv" name="Műsor.tv" version="1.0.2" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="script.module.beautifulsoup4" version="4.6.2" />
-        <import addon="script.module.requests" version="2.22.0" />
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="plugin.video.youtube" />
-        <import addon="plugin.video.stb_hu" /> </requires>
-    <extension point="xbmc.python.pluginsource" library="default.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="en">Műsor.tv műsorújság és kereső</summary>
-        <description lang="hu">Nézd meg a műsorújságot és keress rá a filmekre az stb.hu-n!</description>
-        <language>hu</language>
-        <platform>all</platform>
-        <assets>
-          <icon>icon.png</icon>
-        </assets>
-    </extension>
-</addon><addon id="plugin.video.napiszar" name="Napiszar Videó Addon" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.requests" />
-        <import addon="script.module.resolveurl" />
-        <import addon="script.module.beautifulsoup4" />
-        <import addon="plugin.video.youtube" />
-    </requires>
-    <extension point="xbmc.python.pluginsource" library="default.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">Napiszar Videó Kiegészítő</summary>
-        <description lang="hu">Napiszar.biz videóinak böngészése és lejátszása Kodi-ban.</description>
-        <platform>all</platform>
-        <assets>
-            <icon>resources/icon.png</icon>
-            <fanart>resources/fanart.jpg</fanart>
-        </assets>
-    </extension>
-</addon><addon id="plugin.video.napiszex" name="Napiszex" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.resolveurl" version="5.0.0" />
-        <import addon="script.module.requests" version="2.0.0" />
-    </requires>
-    <extension point="xbmc.python.pluginsource" library="main.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="en">Napiszex Video Addon</summary>
-        <description lang="en">Browse and watch videos from napiszex.com using ResolveURL.</description>
-        <platform>all</platform>
-        <assets>
-            <icon>icon.png</icon>
-            <fanart>fanart.jpg</fanart>
-        </assets>
-    </extension>
-</addon><addon id="plugin.video.porno1" name="Porno1.hu" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.requests" version="2.0.0" />
-	<import addon="script.module.beautifulsoup4" version="4.6.3" />
-    </requires>
-    <extension point="xbmc.python.pluginsource" library="main.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">Porno1.hu Video Addon</summary>
-        <description lang="hu">Böngéssz és nézz videókat a porno1.hu oldalról.</description>
-        <platform>all</platform>
-        <assets>
-            <icon>icon.png</icon>
-            <fanart>fanart.jpg</fanart>
-        </assets>
-    </extension>
-</addon><addon id="plugin.video.pornovegas" name="Porno.Vegas" version="1.0.0" provider-name="ZiDERViSiON">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-        <import addon="script.module.requests" version="2.0.0" />
-	<import addon="script.module.beautifulsoup4" version="4.6.3" />
-    </requires>
-    <extension point="xbmc.python.pluginsource" library="main.py">
-        <provides>video</provides>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">Porno.Vegas Video Addon</summary>
-        <description lang="hu">Böngéssz és nézz videókat a porno.vegas oldalról.</description>
-        <platform>all</platform>
-        <assets>
-            <icon>icon.png</icon>
-            <fanart>fanart.jpg</fanart>
-        </assets>
-    </extension>
-</addon><addon id="repository.zidervision" version="1.0.2" name="ZiderVision Repo" provider-name="Zider">
-    <requires>
-        <import addon="xbmc.python" version="3.0.0" />
-    </requires>
-    <extension point="xbmc.addon.repository" name="ZiderVision Repository">
-        <dir>
-            <info compressed="false">https://vzoli1987.github.io/repository.zidervision/zips/addons.xml</info>
-            <checksum>https://vzoli1987.github.io/repository.zidervision/zips/addons.xml.md5</checksum>
-            <datadir zip="true">https://vzoli1987.github.io/repository.zidervision/zips/</datadir>
-        </dir>
-    </extension>
-    <extension point="xbmc.addon.metadata">
-        <summary lang="hu">ZiderVision Repository</summary>
-        <description lang="hu">Magyar nyelvű kiegészítők tárolója.</description>
-        <platform>all</platform>
-    </extension>
-</addon></addons>
+        </extension>
+    </addon>
+    <addon id="plugin.video.darkmoovie" name="DarkMoovie" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.25.1" />
+            <import addon="script.module.resolveurl" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="main.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">DarkMoovie online filmek</summary>
+            <description lang="hu">Filmek és sorozatok a moovie.do.am oldalról.</description>
+            <platform>all</platform>
+        </extension>
+    </addon>
+    <addon id="plugin.video.filmezzmozi" name="FilmezzMozi" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.resolveurl" version="5.0.00" />
+            <import addon="script.module.requests" version="2.25.1" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="main.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">FilmezzMozi Kodi Addon</summary>
+            <description lang="hu">Online filmek megtekintése a filmezzmozi.do.am oldalról.</description>
+            <platform>all</platform>
+        </extension>
+    </addon>
+    <addon id="plugin.video.filmhiradok" name="Filmhíradók" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.25.1" />
+            <import addon="script.module.beautifulsoup4" version="4.6.3" />
+            <import addon="script.module.resolveurl" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="main.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">Filmhiradók online</summary>
+            <description lang="hu">Filmhíradók a filmhiradokonline.hu oldalról.</description>
+            <platform>all</platform>
+        </extension>
+    </addon>
+    <addon id="plugin.video.fuggetlenfilmek" name="Független Filmek" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.25.1" />
+            <import addon="script.module.beautifulsoup4" version="4.9.3" />
+            <import addon="script.module.resolveurl" version="5.0.00" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="main.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">Független magyar filmek adatbázisa</summary>
+            <description lang="hu">Nézz magyar amatőr és független filmeket közvetlenül a Kodiból.</description>
+            <platform>all</platform>
+            <language>hu</language>
+        </extension>
+    </addon>
+    <addon id="plugin.video.ingyenpornotv" name="IngyenPorno.TV" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.0.0" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="main.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">IngyenPorno.TV Video Addon</summary>
+            <description lang="hu">Böngéssz és nézz videókat az ingyenporno.tv oldalról.</description>
+            <platform>all</platform>
+            <assets>
+                <icon>icon.png</icon>
+                <fanart>fanart.jpg</fanart>
+            </assets>
+        </extension>
+    </addon>
+    <addon id="plugin.video.liveonsat" name="LiveOnSat.com" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.25.1" />
+            <import addon="script.module.beautifulsoup4" version="4.6.2" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="default.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu_HU">LiveOnSat napi műsor</summary>
+            <description lang="hu_HU">A LiveOnSat.com kinyert mai sportközvetítések listája.</description>
+            <disclaimer lang="hu_HU">Ez a kiegészítő csak információs célokat szolgál.</disclaimer>
+            <language>hu</language>
+            <platform>all</platform>
+            <assets>
+                <icon>icon.png</icon>
+                <fanart>fanart.jpg</fanart>
+            </assets>
+        </extension>
+    </addon>
+    <addon id="plugin.video.musor.tv" name="Műsor.tv" version="1.0.2" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="script.module.beautifulsoup4" version="4.6.2" />
+            <import addon="script.module.requests" version="2.22.0" />
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="plugin.video.youtube" />
+            <import addon="plugin.video.stb_hu" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="default.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="en">Műsor.tv műsorújság és kereső</summary>
+            <description lang="hu">Nézd meg a műsorújságot és keress rá a filmekre az stb.hu-n!</description>
+            <language>hu</language>
+            <platform>all</platform>
+            <assets>
+                <icon>icon.png</icon>
+            </assets>
+        </extension>
+    </addon>
+    <addon id="plugin.video.napiszar" name="Napiszar Videó Addon" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" />
+            <import addon="script.module.resolveurl" />
+            <import addon="script.module.beautifulsoup4" />
+            <import addon="plugin.video.youtube" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="default.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">Napiszar Videó Kiegészítő</summary>
+            <description lang="hu">Napiszar.biz videóinak böngészése és lejátszása Kodi-ban.</description>
+            <platform>all</platform>
+            <assets>
+                <icon>resources/icon.png</icon>
+                <fanart>resources/fanart.jpg</fanart>
+            </assets>
+        </extension>
+    </addon>
+    <addon id="plugin.video.napiszex" name="Napiszex" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.resolveurl" version="5.0.0" />
+            <import addon="script.module.requests" version="2.0.0" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="main.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="en">Napiszex Video Addon</summary>
+            <description lang="en">Browse and watch videos from napiszex.com using ResolveURL.</description>
+            <platform>all</platform>
+            <assets>
+                <icon>icon.png</icon>
+                <fanart>fanart.jpg</fanart>
+            </assets>
+        </extension>
+    </addon>
+    <addon id="plugin.video.porno1" name="Porno1.hu" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.0.0" />
+            <import addon="script.module.beautifulsoup4" version="4.6.3" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="main.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">Porno1.hu Video Addon</summary>
+            <description lang="hu">Böngéssz és nézz videókat a porno1.hu oldalról.</description>
+            <platform>all</platform>
+            <assets>
+                <icon>icon.png</icon>
+                <fanart>fanart.jpg</fanart>
+            </assets>
+        </extension>
+    </addon>
+    <addon id="plugin.video.pornovegas" name="Porno.Vegas" version="1.0.0" provider-name="ZiDERViSiON">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.0.0" />
+            <import addon="script.module.beautifulsoup4" version="4.6.3" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="main.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">Porno.Vegas Video Addon</summary>
+            <description lang="hu">Böngéssz és nézz videókat a porno.vegas oldalról.</description>
+            <platform>all</platform>
+            <assets>
+                <icon>icon.png</icon>
+                <fanart>fanart.jpg</fanart>
+            </assets>
+        </extension>
+    </addon>
+    <addon id="repository.zidervision" version="1.0.2" name="ZiderVision Repo" provider-name="Zider">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+        </requires>
+        <extension point="xbmc.addon.repository" name="ZiderVision Repository">
+            <dir>
+                <info compressed="false">https://vzoli1987.github.io/repository.zidervision/zips/addons.xml</info>
+                <checksum>https://vzoli1987.github.io/repository.zidervision/zips/addons.xml.md5</checksum>
+                <datadir zip="true">https://vzoli1987.github.io/repository.zidervision/zips/</datadir>
+            </dir>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu">ZiderVision Repository</summary>
+            <description lang="hu">Magyar nyelvű kiegészítők tárolója.</description>
+            <platform>all</platform>
+        </extension>
+    </addon>
+</addons>
