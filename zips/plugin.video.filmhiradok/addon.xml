@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.filmhiradok" name="Filmhíradók" version="1.0.0" provider-name="ZiDERViSiON">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.25.1"/>
+	<import addon="script.module.beautifulsoup4" version="4.6.3"/>
+        <import addon="script.module.resolveurl"/> </requires>
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="hu">Filmhiradók online</summary>
+        <description lang="hu">Filmhíradók a filmhiradokonline.hu oldalról.</description>
+        <platform>all</platform>
+    </extension>
+</addon>
