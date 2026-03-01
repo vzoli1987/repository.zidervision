@@ -2,4 +2,18 @@
 - Első verzió
 [B]1.0.1[/B]
 - Korrekt beletekerés javítva, így már nem a komplett videót indítja el :-)
+[B]1.0.2[/B]
+[Új] Intelligens lejátszás: Beépített riport-időzítés (JS Offset szimuláció). Mostantól csak a kiválasztott riportot játssza le a teljes híradóból.
+
+[Új] HD Bélyegképek: Alacsony felbontású mozaikképek helyett nagy felbontású (keyframe) borítóképek megjelenítése.
+
+[Új] Keresési előzmények: A korábbi keresések mentése és gyors elérése a menüből.
+
+[Javítás] Kodi 21 Omega kompatibilitás: Teljes körű támogatás az új VideoInfoTag API-hoz és a Python 3 alapú környezethez.
+
+[Javítás] Hálózati stabilitás: Fix 0.5 másodperces várakozás a kérések között (Anti-bot védelem) és 403-as hiba elkerülése a sütik (Cookie) kezelésével.
+
+[Gyorsítás] Optimalizált listázás: A tartalomjegyzékek és extra adatok aszinkron betöltése, ami jelentősen gyorsabb navigációt tesz lehetővé az Archívumban.
+
+[Dizájn] Új, sötét tónusú ikon és fanart támogatás.
 
