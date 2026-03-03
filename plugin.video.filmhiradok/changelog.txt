@@ -16,4 +16,5 @@
 [Gyorsítás] Optimalizált listázás: A tartalomjegyzékek és extra adatok aszinkron betöltése, ami jelentősen gyorsabb navigációt tesz lehetővé az Archívumban.
 
 [Dizájn] Új, sötét tónusú ikon és fanart támogatás.
-
+[B]1.0.3[/B]
+[Új] Évszám szerinti szűrés külön 

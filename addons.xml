@@ -55,7 +55,7 @@
             <platform>all</platform>
         </extension>
     </addon>
-    <addon id="plugin.video.filmhiradok" name="Filmhíradók" version="1.0.2" provider-name="ZiDERViSiON">
+    <addon id="plugin.video.filmhiradok" name="Filmhíradók" version="1.0.3" provider-name="ZiDERViSiON">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
             <import addon="script.module.requests" version="2.25.1" />
