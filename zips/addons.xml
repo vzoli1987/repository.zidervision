@@ -131,7 +131,7 @@
             </assets>
         </extension>
     </addon>
-    <addon id="plugin.video.musor.tv" name="Műsor.tv" version="1.0.2" provider-name="ZiDERViSiON">
+    <addon id="plugin.video.musor.tv" name="Műsor.tv" version="1.0.3" provider-name="ZiDERViSiON">
         <requires>
             <import addon="script.module.beautifulsoup4" version="4.6.2" />
             <import addon="script.module.requests" version="2.22.0" />
