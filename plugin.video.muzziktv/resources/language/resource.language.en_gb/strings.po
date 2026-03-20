@@ -1,0 +1,19 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: plugin.video.muzziktv\n"
+"Language: en_GB\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "30000"
+msgstr "Login"
+
+msgid "30001"
+msgstr "Credentials"
+
+msgid "30002"
+msgstr "Email"
+
+msgid "30003"
+msgstr "Password"

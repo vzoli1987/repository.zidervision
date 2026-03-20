@@ -152,6 +152,24 @@
             </assets>
         </extension>
     </addon>
+    <addon id="plugin.video.muzziktv" name="Muzzik TV" version="1.0.3" provider-name="Manus">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.25.1" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="addon.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="en_GB">Muzzik TV Video Addon</summary>
+            <description lang="en_GB">Watch Muzzik TV and Audio channels on Kodi.</description>
+            <platform>all</platform>
+            <assets>
+                <icon>icon.png</icon>
+                <fanart>fanart.jpg</fanart>
+            </assets>
+        </extension>
+    </addon>
     <addon id="plugin.video.napiszar" name="Napiszar Videó Addon" version="1.0.0" provider-name="ZiDERViSiON">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
