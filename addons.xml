@@ -55,7 +55,7 @@
             <platform>all</platform>
         </extension>
     </addon>
-    <addon id="plugin.video.filmdepo" name="FilmDepo" version="1.0.2" provider-name="ZiDER ViSiON">
+    <addon id="plugin.video.filmdepo" name="FilmDepo" version="1.0.3" provider-name="ZiDER ViSiON">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
             <import addon="script.module.requests" version="2.31.0" />
