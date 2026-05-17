@@ -5,6 +5,7 @@ import zipfile
 import time
 import datetime
 import subprocess  # Új modul a Git parancsokhoz
+import copy        # Szükséges az XML tiszta másolásához
 from xml.etree import ElementTree
 
 # --- Beállítások ---
@@ -64,7 +65,8 @@ def generate_repository():
                 if os.path.exists(src_meta):
                     shutil.copy(src_meta, os.path.join(dest_folder, meta_f))
 
-            addons_root.append(addon_node)
+            # deepcopy-val másoljuk, hogy ne sérüljön meg az XML struktúra
+            addons_root.append(copy.deepcopy(addon_node))
             found_any = True
             print(f"[OK] {addon_id} v{version} hozzáadva.")
         except Exception as e:
@@ -75,16 +77,16 @@ def generate_repository():
         if hasattr(ElementTree, 'indent'):
             ElementTree.indent(addons_root, space="    ")
         
-        # 1. Mentés a zips mappába (A Kodi innen olvassa az URL alapján)
+        # 1. Mentés a zips mappába
         xml_zips = os.path.join(zips_path, "addons.xml")
         tree_out = ElementTree.ElementTree(addons_root)
         tree_out.write(xml_zips, encoding="utf-8", xml_declaration=True)
         
-        # 2. Mentés a FŐ mappába (Hogy ott is friss legyen)
+        # 2. Mentés a FŐ mappába
         xml_root = os.path.join(ROOT_DIR, "addons.xml")
         tree_out.write(xml_root, encoding="utf-8", xml_declaration=True)
         
-        # MD5 generálása a zips mappába
+        # MD5 generálása
         with open(xml_zips, "rb") as f:
             md5_h = hashlib.md5(f.read()).hexdigest()
         
@@ -101,8 +103,10 @@ def generate_repository():
 def generate_indexes():
     """Kodi-kompatibilis HTML indexek gyártása"""
     for cur, dirs, files in os.walk(ROOT_DIR):
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in IGNORE]
+        # KIZÁRJUK a zips mappát is a bejárásból, hogy oda ne gyártson index.html-t!
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in IGNORE and d != "zips"]
         files = [f for f in files if not f.startswith('.') and f not in IGNORE and f != 'index.html']
+        
         rel = os.path.relpath(cur, ROOT_DIR)
         title = "/" if rel == "." else f"/{rel.replace(os.path.sep, '/')}"
         h = f"<html><head><title>Index of {title}</title></head><body><h1>Index of {title}</h1><hr><pre>"
@@ -126,8 +130,15 @@ def git_push():
         if not commit_msg:
             commit_msg = f"Repo update: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
-        # Git parancsok futtatása
+        # Git parancsok futtatása biztonságosan
         subprocess.run(["git", "add", "."], check=True)
+        
+        # Megnézzük, van-e tényleges változás, mielőtt commitolnánk
+        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        if not status.stdout.strip():
+            print("[INFO] Nincs semmi változás, a Git push átugorva.")
+            return
+
         subprocess.run(["git", "commit", "-m", commit_msg], check=True)
         subprocess.run(["git", "push"], check=True)
         print("\n[SIKER] Minden fent van GitHubon!")
@@ -141,5 +152,5 @@ if __name__ == "__main__":
     generate_indexes()
     print("\nGenerálás sikeres!")
     
-    time.sleep(0.5) # A kért várakozás
+    time.sleep(0.5) # A kért fix várakozási idő a szerver kímélése érdekében
     git_push()
