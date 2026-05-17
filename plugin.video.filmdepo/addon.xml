@@ -3,8 +3,8 @@
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
         <import addon="script.module.requests" version="2.31.0"/>
-        <import addon="script.module.beautifulsoup4" version="4.12.3"/>
-        <import addon="script.module.resolveurl" />  <!-- EZ KELL! -->
+        <import addon="script.module.beautifulsoup4" />
+        <import addon="script.module.resolveurl" />
     </requires>
     <extension point="xbmc.python.pluginsource" library="main.py">
         <provides>video</provides>
