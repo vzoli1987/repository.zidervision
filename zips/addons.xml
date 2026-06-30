@@ -166,6 +166,23 @@
             </assets>
         </extension>
     </addon>
+    <addon id="plugin.video.mozibox" name="MoziBox" version="1.0.2" provider-name="Fejlesztő">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.25.1" />
+            <import addon="script.module.beautifulsoup4" version="4.9.3" />
+            <import addon="script.module.resolveurl" version="5.1.00" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="main.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu_HU">MoziBox - Online film gyűjtemény</summary>
+            <description lang="hu_HU">Filmek listázása és lejátszása a MoziBox oldalról.</description>
+            <language>hu</language>
+            <platform>all</platform>
+        </extension>
+    </addon>
     <addon id="plugin.video.mozigo24hu" name="MoziGo24.hu" version="1.0.1" provider-name="ZiDER ViSiON">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
