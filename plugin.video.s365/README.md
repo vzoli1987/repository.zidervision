@@ -4,7 +4,7 @@ Ez a projekt **Kodi 21.3-hoz** készült Python 3 bővítmény. A keresési tal�
 
 ## Telepítés
 
-A kiadott `plugin.video.s365-0.6.4.zip` fájlt másold a Kodi eszközre. Ezután a Kodi főmenüben válaszd a **Kiegészítők → Telepítés ZIP-fájlból** lehetőséget, keresd ki a ZIP-et, majd a **Videókiegészítők** között indítsd el az **S365** bővítményt. A bővítmény a `script.module.resolveurl` **5.1.0 vagy újabb** függőséget deklarálja, ezért a ResolveURL-nek a Kodi-ban elérhetőnek kell lennie a telepítéskor. Ez a kiadás Kodi 21.3 v1 formátumú beállításfájlt használ, így a helyi előzmények és az elérhetőségi gyorsítótár beállításai is regisztrálódnak.
+A kiadott `plugin.video.s365-0.6.10.zip` fájlt másold a Kodi eszközre. Ezután a Kodi főmenüben válaszd a **Kiegészítők → Telepítés ZIP-fájlból** lehetőséget, keresd ki a ZIP-et, majd a **Videókiegészítők** között indítsd el az **S365** bővítményt. A bővítmény a `script.module.resolveurl` **5.1.0 vagy újabb** függőséget deklarálja, ezért a ResolveURL-nek a Kodi-ban elérhetőnek kell lennie a telepítéskor. Ez a kiadás Kodi 21.3 v1 formátumú beállításfájlt használ, így a helyi előzmények és az elérhetőségi gyorsítótár beállításai is regisztrálódnak.
 
 ## Navigáció és lejátszási feloldás
 
@@ -18,7 +18,7 @@ A főmenü **Keresés** pontja egy külön keresési nézetet nyit. Itt az **Új
 
 A bővítmény az évad- és epizódlisták megnyitásakor automatikusan ellenőrzi a forrásállapotot. A vizsgálat alatt a Kodi **Források ellenőrzése** folyamatjelzőt jelenít meg, benne az ellenőrzött évad vagy epizód sorszámával és címével; a folyamat megszakítható. Kodi 21.3 alatt a folyamatjelző egyetlen, kompatibilis üzenetsorban jeleníti meg ezeket az adatokat. A `Szinkronizálás alatt` választ adó, illetve tényleges videóforrást nem tartalmazó epizódok nem jelennek meg. Az az évad, amelyben egyetlen elérhető epizód sincs, szintén kimarad a sorozat nézetéből. Az eredményt húsz percig helyben gyorsítótárazza, hogy a későbbi megnyitások gyorsabbak legyenek; átmeneti hálózati hiba esetén nem rejt el tartalmat.
 
-Ha a webhely egy katalóguslistán lapozólinket közöl, a lista végén **Következő oldal** vagy `Oldal N` menüpont jelenik meg. Ezzel a következő katalógusoldal közvetlenül megnyitható a Kodi-ból.
+A kategórialapozás a webhely számozott útvonalait is felismeri, de a Kodi-listát nem zsúfolja tele oldalszámokkal. A lista végén csak egyetlen menüpont jelenik meg: **Következő oldal · aktuális / összes**. Például a `/friss-epizodok/2` nézetben a `Következő oldal · 2 / 5` elem közvetlenül a `/friss-epizodok/3` címre vezet. A számozott katalóguslapoknál a bővítmény nem ágyazza be a teljes külső webcímet a Kodi plugin-URL-jébe: csak a kategória azonosítóját és az oldalszámot küldi át, majd ebből építi vissza a pontos célcímet. A bővítmény a kizárólag az `EZ IS TETSZHET` című, minden oldalon azonos ajánlósáv kezdetétől levágja a dokumentumot; a főoldal más, tényleges katalógust tartalmazó blokkjai ettől változatlanul megmaradnak. Így az ajánlóblokk elemei nem kerülnek a Kodi-listába, de egyik nézet sem marad üres. Az oldalváltáskor a bővítmény kifejezetten frissíti a Kodi-listát is, ezért nem maradhat a korábbi oldal tartalma a képernyőn. Az utolsó oldalon ez az elem nem látszik.
 
 A forráslista közvetlenül a lejátszható szolgáltatókkal indul; nincs külön ellenőrző vagy várakoztató menüpont. A szolgáltatás által ténylegesen közölt hangsáv-, felirat- vagy technikai jelölések a forrás másodlagos adataként jelennek meg, de a bővítmény nem találgat HD/SD minőséget vagy játékidőt.
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addon id="plugin.video.s365"
        name="S365"
-       version="0.6.4"
+       version="0.6.10"
        provider-name="S365">
   <requires>
     <import addon="xbmc.python" version="3.0.0" />
@@ -12,7 +12,7 @@
   </extension>
   <extension point="xbmc.addon.metadata">
     <summary lang="hu_HU">S365 sorozat-, évad- és epizódkatalógus Kodihoz</summary>
-    <description lang="hu_HU">Kodi 21.3-kompatibilis, Python 3 alapú S365 videóbővítmény. A ResolveURL feloldást használja a támogatott külső videóhosztok lejátszásához. A sorozatokat évad–epizód hierarchiában jeleníti meg; Kodi 21.3-kompatibilis beállítási sémával, Folytatás nézettel, elérhetőségi szűréssel és folyamatjelzővel, katalóguslapozással, színes menükkel, keresési előzményekkel és letisztított SRZT forrásválasztással egészíti ki a sorozatböngészést.</description>
+    <description lang="hu_HU">Kodi 21.3-kompatibilis, Python 3 alapú S365 videóbővítmény. A ResolveURL feloldást használja a támogatott külső videóhosztok lejátszásához. A sorozatokat évad–epizód hierarchiában jeleníti meg; Kodi 21.3-kompatibilis beállítási sémával, Folytatás nézettel, elérhetőségi szűréssel és folyamatjelzővel, egygombos, külön Kodi-lapozási útvonalat és címalapú ajánlósáv-leválasztást használó kategórialapozással, színes menükkel, keresési előzményekkel és letisztított SRZT forrásválasztással egészíti ki a sorozatböngészést.</description>
     <platform>all</platform>
     <license>Proprietary</license>
     <source>https://sorozat365.hu/</source>

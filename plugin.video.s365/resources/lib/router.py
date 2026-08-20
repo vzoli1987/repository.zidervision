@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import json
 import sys
-from urllib.parse import parse_qs, urlencode
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import xbmc
 import xbmcaddon
@@ -24,6 +24,12 @@ COLOR_ORANGE = 'FFFFB74D'
 COLOR_GREEN = 'FF81C784'
 COLOR_PURPLE = 'FFBA68C8'
 COLOR_MUTED = 'FFB0BEC5'
+PAGED_CATALOG_SECTIONS = frozenset(('friss-epizodok', 'friss-evadok', 'uj-sorozatok'))
+
+
+def _log(message):
+    """Write concise navigation diagnostics to Kodi's standard log."""
+    xbmc.log('S365: {}'.format(message), getattr(xbmc, 'LOGINFO', 1))
 
 
 def tr(message):
@@ -156,7 +162,7 @@ def _source_display(source, occurrences):
 
 def end(content='videos'):
     xbmcplugin.setContent(ADDON_HANDLE, content)
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    xbmcplugin.endOfDirectory(ADDON_HANDLE, updateListing=True, cacheToDisc=False)
 
 
 def home():
@@ -184,7 +190,36 @@ def _availability_progress(items, filter_function, item_kind):
         progress.close()
 
 
+def _catalog_page_parameters(page_url):
+    """Return a compact Kodi-safe route for a numbered catalog page, if recognised."""
+    parsed = urlparse(page_url)
+    path_parts = [part for part in parsed.path.split('/') if part]
+    if len(path_parts) != 2:
+        return None
+    section, number = path_parts
+    if section not in PAGED_CATALOG_SECTIONS or not number.isdigit() or int(number) < 2:
+        return None
+    return section, number
+
+
+def catalog_page(section, number):
+    """Open a numbered catalog page without passing an external URL through Kodi."""
+    section = (section or '').strip().strip('/')
+    if section not in PAGED_CATALOG_SECTIONS:
+        raise s365.S365Error('Érvénytelen katalóguslapozási útvonal.')
+    try:
+        page_number = int(number)
+    except (TypeError, ValueError):
+        raise s365.S365Error('Érvénytelen katalógusoldalszám.')
+    if page_number < 2:
+        raise s365.S365Error('Érvénytelen katalógusoldalszám.')
+    target_url = '{}/{}/{}'.format(s365.catalog_base(), section, page_number)
+    _log('catalog_page: section={}, number={}, target={}'.format(section, page_number, target_url))
+    browse(target_url)
+
+
 def browse(url):
+    _log('browse: url={}'.format(url))
     cards, _metadata, pages = s365.browse(url)
     episode_cards = [card for card in cards if card.get('kind') == 'episode']
     if episode_cards:
@@ -195,7 +230,14 @@ def browse(url):
     for card in cards:
         add_card(card)
     for page in pages:
-        menu_item(page.get('label', 'Következő oldal'), COLOR_ORANGE, 'browse', url=page['url'])
+        page_parameters = _catalog_page_parameters(page['url'])
+        if page_parameters:
+            section, number = page_parameters
+            # Do not put a full external URL in the plugin query string. Kodi receives
+            # a unique, compact route and catalog_page() reconstructs the exact target.
+            menu_item(page.get('label', 'Következő oldal'), COLOR_ORANGE, 'catalog_page', section=section, number=number)
+        else:
+            menu_item(page.get('label', 'Következő oldal'), COLOR_ORANGE, 'browse', url=page['url'])
     end('videos')
 
 
@@ -324,9 +366,12 @@ def run():
     raw = sys.argv[2][1:] if len(sys.argv) > 2 and sys.argv[2].startswith('?') else ''
     params = {key: values[0] for key, values in parse_qs(raw).items()}
     action = params.get('action', 'home')
+    _log('dispatch: raw={}, action={}, params={}'.format(raw, action, params))
     try:
         if action == 'browse':
             browse(params['url'])
+        elif action == 'catalog_page':
+            catalog_page(params['section'], params['number'])
         elif action == 'search':
             search_menu()
         elif action == 'new_search':

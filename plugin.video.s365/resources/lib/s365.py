@@ -148,10 +148,24 @@ def _kind_from_href(href):
     return ''
 
 
+def _primary_catalogue_html(page):
+    """Remove only the persistent ``EZ IS TETSZHET`` recommendation carousel."""
+    # The front page also contains other flowbars (for example Kiemelt), which
+    # are legitimate catalogue content. The repeated block is identified by its
+    # visible title rather than by the generic ``flowbar`` class.
+    recommendation = re.search(
+        r'<div\b[^>]*\bclass=["\'][^"\']*\bflowbar\b[^"\']*["\'][^>]*>\s*<div\b[^>]*\bclass=["\'][^"\']*\btitle\b[^"\']*["\'][^>]*>\s*<span>\s*EZ\s+IS\s+TETSZHET\s*</span>',
+        page,
+        re.I | re.S,
+    )
+    return page[:recommendation.start()] if recommendation else page
+
+
 def parse_cards(page, base=None):
-    """Parse catalogue cards only; series detail pages are handled separately."""
+    """Parse primary catalogue cards; series detail pages are handled separately."""
     cards, seen = [], set()
-    for match in re.finditer(r'<a\b(?P<attrs>[^>]*)>(?P<body>.*?)</a>', page, re.I | re.S):
+    catalogue = _primary_catalogue_html(page)
+    for match in re.finditer(r'<a\b(?P<attrs>[^>]*)>(?P<body>.*?)</a>', catalogue, re.I | re.S):
         attrs, body = match.group('attrs'), match.group('body')
         href = _attribute(attrs, 'href')
         kind = _kind_from_href(href)
@@ -199,23 +213,41 @@ def _detail_links(page, section_name, expected_kind, stop_classes):
 
 
 def pagination_links(page, base_url):
-    """Return non-active pagination links exposed by the S365 HTML."""
-    links, seen = [], set()
+    """Return one clear next-page link for S365's numeric category pagination."""
+    parsed_base = urlparse(base_url)
+    base_path = parsed_base.path.rstrip('/')
+    current_match = re.search(r'/(\d+)$', base_path)
+    current_page = int(current_match.group(1)) if current_match else 1
+    category_path = re.sub(r'/\d+$', '', base_path)
+    category_pattern = re.compile(r'^{}\/(\d+)\/?$'.format(re.escape(category_path))) if category_path else None
+    numbered_pages = {}
+    fallback_next = ''
+
     for match in re.finditer(r'<a\b(?P<attrs>[^>]*)>(?P<body>.*?)</a>', page, re.I | re.S):
         attrs, body = match.group('attrs'), match.group('body')
         classes = _attribute(attrs, 'class').lower()
         label = _clean(body)
         href = _attribute(attrs, 'href')
-        is_next = label.casefold() in ('következő', 'kovetkezo', 'next', '»', '›', '>>') or 'next' in classes
-        is_pager = 'paginator' in classes or 'pagination' in classes or is_next
-        if not is_pager or 'active' in classes or not href:
+        if not href:
             continue
         target = absolute(href, base_url)
-        if target == base_url or target in seen:
+        target_path = urlparse(target).path
+        category_match = category_pattern.match(target_path) if category_pattern else None
+        if category_match:
+            numbered_pages[int(category_match.group(1))] = target
             continue
-        seen.add(target)
-        links.append({'url': target, 'label': 'Következő oldal' if is_next else 'Oldal {}'.format(label or len(links) + 2)})
-    return links
+        if label.casefold() in ('következő', 'kovetkezo', 'next', '»', '›', '>>') or 'next' in classes:
+            fallback_next = target
+
+    if numbered_pages:
+        total_pages = max(numbered_pages)
+        next_url = numbered_pages.get(current_page + 1)
+        if next_url:
+            return [{'url': next_url, 'label': 'Következő oldal · {} / {}'.format(current_page, total_pages)}]
+        return []
+    if fallback_next and fallback_next.rstrip('/') != base_url.rstrip('/'):
+        return [{'url': fallback_next, 'label': 'Következő oldal'}]
+    return []
 
 
 def browse(url):
