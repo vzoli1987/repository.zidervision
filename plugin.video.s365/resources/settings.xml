@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings version="1">
+  <section id="plugin.video.s365">
+    <category id="general" label="S365">
+      <group id="1" label="Kapcsolat">
+        <setting id="catalog_base" type="string" label="S365 katalógus címe">
+          <level>0</level>
+          <default>https://sorozat365.hu</default>
+          <constraints><allowempty>false</allowempty></constraints>
+          <control type="edit" format="string"><heading>S365 katalógus címe</heading></control>
+        </setting>
+        <setting id="stream_base" type="string" label="Stream-katalógus címe">
+          <level>0</level>
+          <default>https://srzt.hu</default>
+          <constraints><allowempty>false</allowempty></constraints>
+          <control type="edit" format="string"><heading>Stream-katalógus címe</heading></control>
+        </setting>
+        <setting id="resolver_url" type="string" label="Saját lejátszási API sablonja" help="Opcionális. Használható helyőrzők: {slug}, {episode_url}.">
+          <level>2</level>
+          <default></default>
+          <constraints><allowempty>true</allowempty></constraints>
+          <control type="edit" format="string"><heading>Saját lejátszási API sablonja</heading></control>
+        </setting>
+        <setting id="resolver_token" type="string" label="Lejátszási API token">
+          <level>2</level>
+          <default></default>
+          <constraints><allowempty>true</allowempty></constraints>
+          <control type="edit" format="string"><heading>Lejátszási API token</heading><hidden>true</hidden></control>
+        </setting>
+        <setting id="request_timeout" type="integer" label="Hálózati időtúllépés (másodperc)">
+          <level>1</level>
+          <default>15</default>
+          <constraints><minimum>5</minimum><step>1</step><maximum>60</maximum></constraints>
+          <control type="spinner" format="integer" />
+        </setting>
+      </group>
+      <group id="2" label="Belső tár">
+        <setting id="search_history" type="string" label="Keresési előzmények belső tárolója">
+          <level>4</level>
+          <default></default>
+          <constraints><allowempty>true</allowempty></constraints>
+          <control type="edit" format="string" />
+        </setting>
+        <setting id="recent_episodes" type="string" label="Folytatás belső tárolója">
+          <level>4</level>
+          <default></default>
+          <constraints><allowempty>true</allowempty></constraints>
+          <control type="edit" format="string" />
+        </setting>
+        <setting id="availability_cache" type="string" label="Elérhetőségi ellenőrzés belső gyorsítótára">
+          <level>4</level>
+          <default></default>
+          <constraints><allowempty>true</allowempty></constraints>
+          <control type="edit" format="string" />
+        </setting>
+      </group>
+    </category>
+  </section>
+</settings>
