@@ -1,4 +1,2 @@
-[B]1.0.3[/B]
-ÚJ: Keresési előzmények – Mostantól elmenti az utolsó 15 keresést, így egy kattintással újraindíthatod őket.
-
-ÚJ: Keresési előzmények törlése – Lehetőség az előzmények listájának ürítésére.
+[B]1.0.4[/B]
+- Keresési funkció hozzáadva, hosszabb leírás elérése javítva
