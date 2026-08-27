@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings version="1">
+    <setting id="base_url" type="text" label="Weboldal alapcíme" default="https://napifilm.hu" />
+    <setting id="developer_mode" type="bool" label="Fejlesztői mód (részletes resolver log)" default="false" />
+    <setting id="last_search" type="text" label="Utolsó keresés" default="" visible="false" />
+</settings>
