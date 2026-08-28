@@ -222,6 +222,57 @@ def extract_year(value):
     return int(match.group(1)) if match else 0
 
 
+def detect_release_tags(value):
+    """Return only source/audio labels explicitly present in site text."""
+    text = clean(value).lower()
+    tags = []
+    patterns = [
+        ("SZINKRONOS", r"\b(?:szinkron(?:os|nal|izált)?|magyar\s+szinkron(?:nal|os)?)\b"),
+        ("ORIGINAL/FELIRATOS", r"\b(?:feliratos|felirattal|felirat|magyar\s+felirat(?:tal|os)?)\b|\b(?:hun\s*sub|subbed)\b"),
+        ("KAMERÁS", r"\b(?:kamerás|cam|hdcam|ts|telesync|telecine)\b"),
+        ("DVD", r"\b(?:dvd|dvdrip|dvdscr|dvd\s*rip)\b"),
+        ("WEB", r"\b(?:web[- .]?dl|web[- .]?rip|web[- .]?release)\b"),
+        ("BLU-RAY", r"\b(?:blu[- .]?ray|bdrip|bluray)\b"),
+        ("HD", r"\b(?:full\s*hd|1080p|720p|2160p|4k|hdrip)\b"),
+    ]
+    for label, pattern in patterns:
+        if re.search(pattern, text, re.I):
+            tags.append(label)
+    return tags
+
+
+def detect_provider(source):
+    """Return a provider label only when a local adapter can handle it."""
+    if zvr is None:
+        return ""
+    embed_urls = re.findall(r'<iframe[^>]+\bsrc=["\']([^"\']+)', source or "", re.I | re.S)
+    for value in embed_urls:
+        host = urlparse(html.unescape(value)).netloc.lower()
+        if "videa.hu" in host or "videakid.hu" in host:
+            return "VIDEA"
+        if "indavideo.hu" in host:
+            return "INDAVIDEO"
+        if "vkvideo.ru" in host or "vk.com" in host:
+            return "VK VIDEO"
+    return ""
+
+
+def format_release_tags(tags):
+    colors = {
+        "SZINKRONOS": "lime",
+        "ORIGINAL/FELIRATOS": "deepskyblue",
+        "KAMERÁS": "tomato",
+        "DVD": "gold",
+        "WEB": "violet",
+        "BLU-RAY": "orange",
+        "HD": "white",
+        "VIDEA": "#55aaff",
+        "INDAVIDEO": "#ff9f43",
+        "VK VIDEO": "#b58cff",
+    }
+    return " ".join("[COLOR %s][%s][/COLOR]" % (colors.get(tag, "lightgrey"), tag) for tag in tags)
+
+
 def html_fragment_to_text(fragment):
     fragment = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", " ", fragment, flags=re.I | re.S)
     fragment = re.sub(r"<br\s*/?>", " ", fragment, flags=re.I)
@@ -246,6 +297,14 @@ def extract_description(source):
 
 def extract_metadata(source):
     description = extract_description(source)
+    title_match = re.search(r"<h1[^>]*>(.*?)</h1>", source, re.I | re.S)
+    page_title = html_fragment_to_text(title_match.group(1)) if title_match else ""
+    h1_attr_match = re.search(r"<h1[^>]*\btitle=[\"']([^\"']+)[\"']", source, re.I | re.S)
+    h1_title = clean(h1_attr_match.group(1)) if h1_attr_match else ""
+    image_alt_match = re.search(r"<img[^>]*\bitemprop=[\"']image[\"'][^>]*\balt=[\"']([^\"']+)[\"']", source, re.I | re.S)
+    image_alt = clean(image_alt_match.group(1)) if image_alt_match else ""
+    release_tags = detect_release_tags(" ".join((page_title, h1_title, image_alt, description)))
+    provider = detect_provider(source)
     genres = [clean(x) for x in re.findall(r'<span[^>]+itemprop=["\']genre["\'][^>]*>(.*?)</span>', source, re.I | re.S)]
     cast = [clean(x) for x in re.findall(r'<[^>]+itemprop=["\']name["\'][^>]*>(.*?)</[^>]+>', source, re.I | re.S)]
     poster_match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', source, re.I)
@@ -257,6 +316,8 @@ def extract_metadata(source):
         "cast": cast,
         "thumb": poster_match.group(1) if poster_match else "",
         "year": extract_year(source),
+        "release_tags": release_tags,
+        "provider": provider,
     }
 
 
@@ -313,7 +374,16 @@ def add_folder(label, path, icon="DefaultFolder.png", action="browse"):
 
 
 def add_video(item):
-    label = item.get("display_label", item["label"])
+    base_label = item["label"]
+    release_tags = item.get("release_tags") or detect_release_tags(" ".join((item.get("label", ""), item.get("plot", ""))))
+    provider = item.get("provider", "")
+    tags = list(release_tags)
+    if provider and provider not in tags:
+        tags.append(provider)
+    tag_text = format_release_tags(tags)
+    label = item.get("display_label", base_label)
+    if tag_text and tag_text not in label:
+        label = "%s  %s" % (label, tag_text)
     li = xbmcgui.ListItem(label=label)
     artwork = item.get("thumb", "") or PLACEHOLDER
     li.setArt({"thumb": artwork, "icon": artwork})
@@ -330,7 +400,14 @@ def add_video(item):
 
 
 def add_series(item):
-    li = xbmcgui.ListItem(label=item["label"])
+    release_tags = item.get("release_tags") or detect_release_tags(" ".join((item.get("label", ""), item.get("plot", ""))))
+    provider = item.get("provider", "")
+    tags = list(release_tags)
+    if provider and provider not in tags:
+        tags.append(provider)
+    tag_text = format_release_tags(tags)
+    label = item["label"] + ("  " + tag_text if tag_text else "")
+    li = xbmcgui.ListItem(label=label)
     artwork = item.get("thumb", "") or PLACEHOLDER
     li.setArt({"thumb": artwork, "icon": artwork})
     info = {"title": item["label"], "plot": item.get("plot", "")}
@@ -374,6 +451,7 @@ def listing_items(source, current_url, kind=None):
         seen.add(absolute)
         title = clean_title(raw_title)
         year = extract_year(raw_title)
+        release_tags = detect_release_tags(raw_title)
         thumb = ""
         slug = href.lower().rstrip("/")
         for src, alt in parser.images.items():
@@ -385,7 +463,7 @@ def listing_items(source, current_url, kind=None):
         display_label = title
         if is_movie:
             display_label = "[COLOR gold]●[/COLOR] [COLOR white]%s[/COLOR]" % title
-        results.append({"label": title, "display_label": display_label, "url": absolute, "thumb": thumb, "plot": "", "year": year, "is_series": is_series})
+        results.append({"label": title, "display_label": display_label, "url": absolute, "thumb": thumb, "plot": "", "year": year, "release_tags": release_tags, "is_series": is_series})
     if kind == "series":
         grouped = {}
         for item in results:
