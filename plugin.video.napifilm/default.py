@@ -17,7 +17,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 from http.cookiejar import CookieJar
-from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
+from urllib.parse import parse_qsl, quote_plus, urlencode, urljoin, urlparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 import xbmc
@@ -44,6 +44,7 @@ BASE_URL = ADDON.getSetting("base_url").strip().rstrip("/") or "https://napifilm
 USER_AGENT = "Mozilla/5.0 (Kodi; NapiFilm addon)"
 VK_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:154.0) Gecko/20100101 Firefox/154.0"
 CACHE_TTL = 900
+LISTING_CACHE_VERSION = 2
 CACHE_DIR = xbmcvfs.translatePath(ADDON.getAddonInfo("profile"))
 ADDON_PATH = xbmcvfs.translatePath(ADDON.getAddonInfo("path"))
 MEDIA_DIR = os.path.join(ADDON_PATH, "resources", "media")
@@ -110,10 +111,7 @@ def load_listing_cache(url, kind):
         if os.path.exists(path) and time.time() - os.path.getmtime(path) < CACHE_TTL:
             with open(path, "r", encoding="utf-8") as cache_file:
                 data = json.load(cache_file)
-            if isinstance(data, list):
-                xbmc.log("NapiFilm listing cache hit: %s" % url, xbmc.LOGDEBUG)
-                return {"items": data, "current_page": 1, "pages": {}}
-            if isinstance(data, dict) and isinstance(data.get("items"), list):
+            if isinstance(data, dict) and data.get("version") == LISTING_CACHE_VERSION and isinstance(data.get("items"), list):
                 data["pages"] = {int(page): page_url for page, page_url in (data.get("pages", {}) or {}).items()}
                 xbmc.log("NapiFilm listing cache hit: %s" % url, xbmc.LOGDEBUG)
                 return data
@@ -127,7 +125,7 @@ def save_listing_cache(url, kind, items, current_page=1, pages=None):
     temporary = path + ".tmp"
     try:
         with open(temporary, "w", encoding="utf-8") as cache_file:
-            json.dump({"items": items, "current_page": current_page, "pages": pages or {}}, cache_file, ensure_ascii=False)
+            json.dump({"version": LISTING_CACHE_VERSION, "items": items, "current_page": current_page, "pages": pages or {}}, cache_file, ensure_ascii=False)
         os.replace(temporary, path)
     except Exception as exc:
         xbmc.log("NapiFilm listing cache write skipped: %s" % exc, xbmc.LOGDEBUG)
@@ -295,8 +293,19 @@ def extract_description(source):
     return clean(match.group(1)) if match else ""
 
 
+def extract_original_title(source):
+    """Extract the site's original-title field for trailer identification."""
+    match = re.search(
+        r"(?:A film eredeti címe|Eredeti cím)\s*:\s*(?:<[^>]*>\s*)*([^<\r\n]+)",
+        source or "",
+        re.I,
+    )
+    return clean(html.unescape(match.group(1))) if match else ""
+
+
 def extract_metadata(source):
     description = extract_description(source)
+    original_title = extract_original_title(source)
     title_match = re.search(r"<h1[^>]*>(.*?)</h1>", source, re.I | re.S)
     page_title = html_fragment_to_text(title_match.group(1)) if title_match else ""
     h1_attr_match = re.search(r"<h1[^>]*\btitle=[\"']([^\"']+)[\"']", source, re.I | re.S)
@@ -312,6 +321,7 @@ def extract_metadata(source):
         poster_match = re.search(r'<img[^>]+itemprop=["\']image["\'][^>]+src=["\']([^"\']+)', source, re.I)
     return {
         "plot": description,
+        "original_title": original_title,
         "genre": genres,
         "cast": cast,
         "thumb": poster_match.group(1) if poster_match else "",
@@ -368,9 +378,31 @@ def parse_page(source):
 
 def add_folder(label, path, icon="DefaultFolder.png", action="browse"):
     li = xbmcgui.ListItem(label=label)
-    li.setArt({"icon": icon, "thumb": icon})
+    if icon:
+        li.setArt({"icon": icon, "thumb": icon})
     target = path if path.startswith("__") else get_url(path)
     xbmcplugin.addDirectoryItem(HANDLE, build_plugin_url(action, target), li, True)
+
+
+def add_trailer_context(item, list_item):
+    original_title = (item.get("original_title") or item.get("label") or "").strip()
+    if not original_title:
+        return
+    year = str(item.get("year") or "").strip()
+    query = "%s %s official trailer" % (original_title, year) if year else "%s official trailer" % original_title
+    target = build_plugin_url("trailer_search", query)
+    list_item.addContextMenuItems([("TRAILER KERESÉSE", "RunPlugin(%s)" % target)])
+
+
+def trailer_search(query):
+    query = (query or "").strip()
+    if not query:
+        return
+    if not xbmc.getCondVisibility("System.HasAddon(plugin.video.youtube)"):
+        xbmcgui.Dialog().ok("NapiFilm", "A trailer lejátszásához telepítsd a Kodi YouTube kiegészítőt.")
+        return
+    youtube_url = "plugin://plugin.video.youtube/search/?q=" + quote_plus(query)
+    xbmc.executebuiltin("ActivateWindow(Videos,%s)" % youtube_url)
 
 
 def add_video(item):
@@ -395,6 +427,7 @@ def add_video(item):
     if item.get("cast"):
         info["cast"] = item["cast"]
     li.setInfo("video", info)
+    add_trailer_context(item, li)
     li.setProperty("IsPlayable", "true")
     xbmcplugin.addDirectoryItem(HANDLE, build_plugin_url("play", item["url"]), li, False)
 
@@ -416,6 +449,7 @@ def add_series(item):
     if item.get("genre"):
         info["genre"] = ", ".join(item["genre"])
     li.setInfo("video", info)
+    add_trailer_context(item, li)
     xbmcplugin.addDirectoryItem(HANDLE, build_plugin_url("series", item["url"]), li, True)
 
 
@@ -434,11 +468,22 @@ def listing_items(source, current_url, kind=None):
         raw_title = clean(link["title"] or link["text"])
         if not href or href.startswith("#") or not raw_title:
             continue
+        if raw_title in ("<", ">"):
+            continue
         if href.rstrip("/") == "/sorozatok":
             continue
         absolute = urljoin(current_url, href)
+        # The site's pagination links are exposed as plain numbers (1, 2, …, 71).
+        # They are navigation controls, not series entries.
+        if re.search(r"(?:[?&])p=\d+", absolute) and re.fullmatch(r"\d+", raw_title):
+            continue
         item_path = urlparse(absolute).path.rstrip("/")
-        is_series = item_path.startswith("/video/") or "/sorozat" in item_path
+        is_series = (
+            item_path.startswith("/video/")
+            or "/sorozat" in item_path
+            or re.search(r"(?:^|[-_])\d+[-_]?evad(?:[-_]|$)", item_path, re.I) is not None
+            or re.search(r"(?:^|[-_])\d+[-_]?resz(?:[-_]|$)", item_path, re.I) is not None
+        )
         is_movie = "-teljes-film" in item_path and not is_series
         if kind == "series" and not is_series:
             continue
@@ -516,6 +561,8 @@ def open_listing(url, label="NapiFilm"):
         results = cached_listing.get("items", [])
         current_page = int(cached_listing.get("current_page", 1) or 1)
         pages = cached_listing.get("pages", {}) or {}
+        if kind == "series":
+            results = [item for item in results if not re.fullmatch(r"\d+", str(item.get("label", "")).strip())]
         xbmc.log("NapiFilm using cached listing items: %d" % len(results), xbmc.LOGDEBUG)
     else:
         try:
@@ -531,8 +578,8 @@ def open_listing(url, label="NapiFilm"):
         add_series(item) if (kind == "series" or item.get("is_series")) else add_video(item)
     total_pages = max([int(page) for page in pages] or [current_page])
     if (current_page + 1) in pages:
-        next_label = "[B][COLOR gold]▶  KÖVETKEZŐ OLDAL[/COLOR][/B]  [COLOR deepskyblue]— %d / %d —[/COLOR]" % (current_page + 1, total_pages)
-        add_folder(next_label, pages[current_page + 1], "DefaultAddonVideo.png")
+        next_label = "[B][COLOR gold]KÖVETKEZŐ OLDAL[/COLOR][/B]  [COLOR deepskyblue](%d / %d)[/COLOR]" % (current_page + 1, total_pages)
+        add_folder(next_label, pages[current_page + 1], "")
     xbmcplugin.endOfDirectory(HANDLE)
 
 
@@ -829,6 +876,8 @@ params = dict(parse_qsl(urlparse(sys.argv[2]).query))
 action = params.get("action", "")
 if action == "play":
     detail(params.get("value", ""))
+elif action == "trailer_search":
+    trailer_search(params.get("value", ""))
 elif action == "search_results":
     query = params.get("value", "").strip()
     if query:

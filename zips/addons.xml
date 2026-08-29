@@ -264,10 +264,10 @@
             </assets>
         </extension>
     </addon>
-    <addon id="plugin.video.napifilm" name="NapiFilm" version="1.0.0" provider-name="ZiderVision" icon="icon.png">
+    <addon id="plugin.video.napifilm" name="NapiFilm" version="1.1.7" provider-name="ZiderVision" icon="icon.png">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
-            <import addon="script.module.zidervisionurlresolver" version="1.0.0" />
+            <import addon="script.module.zidervisionurlresolver" version="1.0.4" />
             <import addon="script.module.resolveurl" version="5.1.0" optional="true" />
         </requires>
         <extension point="xbmc.python.pluginsource" library="default.py">
