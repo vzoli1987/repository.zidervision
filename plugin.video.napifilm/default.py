@@ -394,6 +394,54 @@ def add_trailer_context(item, list_item):
     list_item.addContextMenuItems([("TRAILER KERESÉSE", "RunPlugin(%s)" % target)])
 
 
+def youtube_trailer_results(query, limit=4):
+    """Fetch and rank public YouTube search results without selecting one silently."""
+    search_url = "https://www.youtube.com/results?search_query=" + quote_plus(query)
+    request = Request(search_url, headers={"User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.8"})
+    with urlopen(request, timeout=15) as response:
+        page = response.read().decode("utf-8", "replace")
+    match = re.search(r"var ytInitialData = (.*?);</script>", page, re.S)
+    if not match:
+        return []
+    try:
+        data = json.loads(match.group(1))
+    except (TypeError, ValueError):
+        return []
+    results = []
+
+    def walk(value):
+        if isinstance(value, dict):
+            renderer = value.get("videoRenderer")
+            if isinstance(renderer, dict):
+                video_id = renderer.get("videoId", "")
+                title_runs = ((renderer.get("title") or {}).get("runs") or [])
+                channel_runs = ((renderer.get("ownerText") or {}).get("runs") or [])
+                title = "".join(run.get("text", "") for run in title_runs).strip()
+                channel = "".join(run.get("text", "") for run in channel_runs).strip()
+                lowered = title.casefold()
+                blocked = ("shorts", "reaction", "review", "recap", "explained", "fan made", "fanmade")
+                if video_id and title and not any(word in lowered for word in blocked):
+                    score = 0
+                    if "official trailer" in lowered:
+                        score += 10
+                    elif "trailer" in lowered:
+                        score += 6
+                    if "teaser" in lowered:
+                        score += 2
+                    results.append({"id": video_id, "title": title, "channel": channel, "score": score})
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(data)
+    unique = {}
+    for result in results:
+        unique.setdefault(result["id"], result)
+    return sorted(unique.values(), key=lambda result: (-result["score"], result["title"].casefold()))[:limit]
+
+
 def trailer_search(query):
     query = (query or "").strip()
     if not query:
@@ -401,8 +449,24 @@ def trailer_search(query):
     if not xbmc.getCondVisibility("System.HasAddon(plugin.video.youtube)"):
         xbmcgui.Dialog().ok("NapiFilm", "A trailer lejátszásához telepítsd a Kodi YouTube kiegészítőt.")
         return
-    youtube_url = "plugin://plugin.video.youtube/search/?q=" + quote_plus(query)
-    xbmc.executebuiltin("ActivateWindow(Videos,%s)" % youtube_url)
+    try:
+        results = youtube_trailer_results(query, 4)
+    except Exception as exc:
+        xbmc.log("NapiFilm YouTube trailer search error: %s" % exc, xbmc.LOGWARNING)
+        xbmcgui.Dialog().ok("NapiFilm", "A trailer keresése jelenleg nem sikerült.")
+        return
+    if not results:
+        xbmcgui.Dialog().ok("NapiFilm", "Nem találtam lejátszható trailert ehhez: %s" % query)
+        return
+    labels = [result["title"] + ("  —  " + result["channel"] if result["channel"] else "") for result in results]
+    selected = xbmcgui.Dialog().select("Válassz trailert", labels)
+    if selected < 0:
+        return
+    chosen = results[selected]
+    playback_url = "plugin://plugin.video.youtube/play/?video_id=" + chosen["id"]
+    list_item = xbmcgui.ListItem(label=chosen["title"])
+    list_item.setInfo("video", {"title": chosen["title"]})
+    xbmc.Player().play(playback_url, list_item)
 
 
 def add_video(item):
@@ -687,12 +751,15 @@ def play_resolved(provider_urls, title):
                 resolved_videa = zvr.resolve(provider_url) if zvr else ""
                 stream = resolved_videa.get("url", "") if isinstance(resolved_videa, dict) else resolved_videa
                 mimetype = resolved_videa.get("content-type", "") if isinstance(resolved_videa, dict) else ""
+                subtitles = resolved_videa.get("subtitles", {}) if isinstance(resolved_videa, dict) else {}
                 if stream:
                     li = xbmcgui.ListItem(label=title)
                     li.setPath(stream)
                     if mimetype:
                         li.setMimeType(mimetype)
                     li.setInfo("video", {"title": title})
+                    if subtitles:
+                        li.setSubtitles(list(subtitles.values()))
                     xbmcplugin.setResolvedUrl(HANDLE, True, li)
                     xbmcgui.Dialog().notification("NapiFilm", "Lejátszás innen: Videa", xbmcgui.NOTIFICATION_INFO, 3000)
                     xbmc.log("NapiFilm playback source=Videa host=%s quality=%s" % (host, mimetype or "auto"), xbmc.LOGINFO)

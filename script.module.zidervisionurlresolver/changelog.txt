@@ -1,0 +1,5 @@
+[B]1.0.1[/B]
+- Javított Kodi ikon: optimalizált 512x512 PNG az addoncsomag gyökerében.
+- Videa WEBVTT feliratok felismerése a player XML válaszából.
+- A Videa feliratok átadása Kodi számára opcionális subtitle trackként.
+- Videa, IndaVideo és VK Video adapterek karbantartása.

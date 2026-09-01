@@ -129,6 +129,19 @@ def resolve_videa(provider_url, _depth=0):
         xml_bytes = rc4_decrypt(xml_bytes, key + xs_header)
     xml = xml_bytes.decode("utf-8", "replace")
     xbmc.log("NapiFilm Videa parsed XML prefix=%r" % xml[:120], xbmc.LOGINFO)
+    subtitle_tracks = {}
+    for subtitle_src, subtitle_title, subtitle_id in re.findall(
+        r'<subtitle\b[^>]*\bsrc="([^"]+)"[^>]*\btitle="([^"]*)"[^>]*\bid="(\d+)"',
+        xml,
+        re.I,
+    ):
+        subtitle_src = html.unescape(subtitle_src)
+        if subtitle_src.startswith("//"):
+            subtitle_src = "https:" + subtitle_src
+        if subtitle_src.startswith("/"):
+            subtitle_src = "https://videa.hu" + subtitle_src
+        if subtitle_src and subtitle_id:
+            subtitle_tracks[subtitle_title or subtitle_id] = subtitle_src
     raw_sources = re.findall(r'<video_source\b([^>]*)>([^<]+)</video_source>', xml, re.I)
     sources = []
     for attributes, source_url in raw_sources:
@@ -143,7 +156,7 @@ def resolve_videa(provider_url, _depth=0):
     if not sources:
         master = re.search(r"<master_playlist_url>([^<]+)", xml, re.I)
         if master:
-            return {"url": master.group(1).replace("&amp;", "&") + "|User-Agent=%s&Referer=https://videa.hu/" % USER_AGENT, "content-type": "application/vnd.apple.mpegurl"}
+            return {"url": master.group(1).replace("&amp;", "&") + "|User-Agent=%s&Referer=https://videa.hu/" % USER_AGENT, "content-type": "application/vnd.apple.mpegurl", "subtitles": subtitle_tracks}
         return ""
     def source_score(item):
         quality = re.search(r"(\d+)", item[0])
@@ -159,4 +172,4 @@ def resolve_videa(provider_url, _depth=0):
     if hash_match:
         separator = "&" if "?" in source_url else "?"
         source_url = "%s%smd5=%s&expires=%s" % (source_url, separator, hash_match.group(1), expires)
-    return {"url": source_url + "|User-Agent=%s&Referer=https://videa.hu/&Origin=https://videa.hu" % USER_AGENT, "content-type": mimetype}
+    return {"url": source_url + "|User-Agent=%s&Referer=https://videa.hu/&Origin=https://videa.hu" % USER_AGENT, "content-type": mimetype, "subtitles": subtitle_tracks}
