@@ -1,11 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="script.module.zidervisionurlresolver" name="ZiderVision URL Resolver" version="1.0.1" provider-name="ZiderVision" icon="icon.png">
+<addon id="script.module.zidervisionurlresolver" 
+       name="ZiderVision URL Resolver" 
+       version="1.0.1" 
+       provider-name="ZiderVision">
+
+  <requires>
+    <import addon="xbmc.python" version="3.0.0"/>
+  </requires>
+
   <extension point="xbmc.python.module" library="lib" />
+
   <extension point="xbmc.addon.metadata">
     <summary lang="hu_HU">ZiderVision saját videó URL-feloldó modul</summary>
+    <summary lang="en_GB">ZiderVision URL resolver module</summary>
+
     <description lang="hu_HU">Videa, IndaVideo és VK Video adapterek Kodi kiegészítők számára.</description>
+    <description lang="en_GB">Videa, IndaVideo and VK Video adapters for Kodi add-ons.</description>
+
     <platform>all</platform>
     <license>GPL-3.0-or-later</license>
+
     <assets>
       <icon>resources/icon.png</icon>
     </assets>

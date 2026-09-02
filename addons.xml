@@ -264,7 +264,7 @@
             </assets>
         </extension>
     </addon>
-    <addon id="plugin.video.napifilm" name="NapiFilm" version="1.0.2" provider-name="ZiderVision" icon="icon.png">
+    <addon id="plugin.video.napifilm" name="NapiFilm" version="1.0.2" provider-name="ZiderVision">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
             <import addon="script.module.zidervisionurlresolver" version="1.0.1" />
@@ -275,11 +275,13 @@
         </extension>
         <extension point="xbmc.addon.metadata">
             <summary lang="hu_HU">NapiFilm katalógus és engedélyezett videólejátszás</summary>
+            <summary lang="en_GB">NapiFilm catalogue and authorized video playback</summary>
             <description lang="hu_HU">A NapiFilm nyilvános katalógusának böngészése. A lejátszás kizárólag engedélyezett forrásokkal használható.</description>
+            <description lang="en_GB">Browse the public NapiFilm catalogue. Playback must only be used with authorized sources.</description>
             <platform>all</platform>
             <license>GPL-3.0-or-later</license>
             <assets>
-                <icon>icon.png</icon>
+                <icon>resources/icon.png</icon>
             </assets>
         </extension>
     </addon>
@@ -412,11 +414,16 @@
             <platform>all</platform>
         </extension>
     </addon>
-    <addon id="script.module.zidervisionurlresolver" name="ZiderVision URL Resolver" version="1.0.1" provider-name="ZiderVision" icon="icon.png">
+    <addon id="script.module.zidervisionurlresolver" name="ZiderVision URL Resolver" version="1.0.1" provider-name="ZiderVision">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+        </requires>
         <extension point="xbmc.python.module" library="lib" />
         <extension point="xbmc.addon.metadata">
             <summary lang="hu_HU">ZiderVision saját videó URL-feloldó modul</summary>
+            <summary lang="en_GB">ZiderVision URL resolver module</summary>
             <description lang="hu_HU">Videa, IndaVideo és VK Video adapterek Kodi kiegészítők számára.</description>
+            <description lang="en_GB">Videa, IndaVideo and VK Video adapters for Kodi add-ons.</description>
             <platform>all</platform>
             <license>GPL-3.0-or-later</license>
             <assets>
