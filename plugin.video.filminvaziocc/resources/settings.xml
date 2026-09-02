@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<settings version="1">
+    <category label="Cloudflare / beküldött linkek">
+        <setting id="fs_enable" type="boolean" label="Helyi FlareSolverr használata" default="false" />
+        <setting id="fs_host" type="text" label="FlareSolverr cím" default="http://localhost:8191/v1" enable="eq(-1,true)" />
+    </category>
+    <category label="Gyorsítótár">
+        <setting id="cache_enable" type="boolean" label="Oldalcache használata" default="true" />
+        <setting id="cache_ttl" type="number" label="Cache élettartama másodpercben" default="1800" enable="eq(-1,true)" />
+    </category>
+</settings>
