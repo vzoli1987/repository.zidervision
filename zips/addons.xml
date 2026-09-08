@@ -15,6 +15,27 @@
             <platform>all</platform>
         </extension>
     </addon>
+    <addon id="plugin.audio.happydancedeejayz" name="HappyDanceDeejayz" version="1.0.0" provider-name="HappyDanceDeejayz">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.resolveurl" version="5.1.0" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="addon.py">
+            <provides>audio</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu_HU">HappyDanceDeejayz mixek</summary>
+            <description lang="hu_HU">A HappyDanceDeejayz.hu nyilvánosan elérhető mixeinek böngészése és lejátszása.</description>
+            <assets>
+                <icon>icon.png</icon>
+                <fanart>fanart.jpg</fanart>
+            </assets>
+            <platform>all</platform>
+            <license>GPL-3.0-or-later</license>
+            <website>https://www.happydancedeejayz.hu/</website>
+            <source>https://www.happydancedeejayz.hu/</source>
+        </extension>
+    </addon>
     <addon id="plugin.video.awilime" name="Awilime.com" version="1.0.1" provider-name="ZiDERViSiON">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
