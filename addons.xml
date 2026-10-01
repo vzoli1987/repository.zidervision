@@ -438,6 +438,24 @@
             <platform>all</platform>
         </extension>
     </addon>
+    <addon id="plugin.video.videx" name="Videx Saját Stream" version="1.0.0" provider-name="TeNeved">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+            <import addon="script.module.requests" version="2.25.1" />
+            <import addon="inputstream.adaptive" version="21.0.0" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="default.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu_HU">Saját Videx stream kliens</summary>
+            <description lang="hu_HU">Saját fejlesztésű csatornák lejátszása Kodi alatt.</description>
+            <platform>all</platform>
+            <assets>
+                <icon>icon.png</icon>
+            </assets>
+        </extension>
+    </addon>
     <addon id="repository.zidervision" version="1.0.0" name="ZiderVision Repo" provider-name="Zider">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
