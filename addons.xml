@@ -229,6 +229,25 @@
             </assets>
         </extension>
     </addon>
+    <addon id="plugin.video.livetvsx" name="LiveTV SX" version="0.5.0" provider-name="LiveTV SX">
+        <requires>
+            <import addon="xbmc.python" version="3.0.0" />
+        </requires>
+        <extension point="xbmc.python.pluginsource" library="default.py">
+            <provides>video</provides>
+        </extension>
+        <extension point="xbmc.addon.metadata">
+            <summary lang="hu_HU">Ikonos sportműsor és HLS/DASH/MP4 lejátszás</summary>
+            <description lang="hu_HU">Sportágikonokkal, kezdési időkkel és élő eredményekkel; publikus HLS, DASH vagy MP4 lejátszás. AceStream-források kihagyva.</description>
+            <summary lang="en_GB">Sports schedule with icons and HLS/DASH/MP4 playback</summary>
+            <description lang="en_GB">Sports icons, start times and live scores; public HLS, DASH or MP4 playback. AceStream sources are omitted.</description>
+            <platform>all</platform>
+            <assets>
+                <icon>resources/icon.png</icon>
+            </assets>
+            <license>MIT</license>
+        </extension>
+    </addon>
     <addon id="plugin.video.mozibox" name="MoziBox" version="1.0.2" provider-name="Fejlesztő">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
