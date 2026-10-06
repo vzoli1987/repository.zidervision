@@ -155,8 +155,8 @@ def flaresolverr_request(url):
     return solution
 
 
-def fetch(url, data=None):
-    if data is None:
+def fetch(url, data=None, use_cache=True):
+    if data is None and use_cache:
         cached = cache_read(url)
         if cached is not None:
             if is_cloudflare_challenge(cached):
@@ -167,6 +167,7 @@ def fetch(url, data=None):
             FETCH_STATS["cache"] += 1
             xbmc.log("Filminvaziocc cache hit: %s" % url, xbmc.LOGDEBUG)
             return cached
+    if data is None:
         FETCH_STATS["network"] += 1
     referer = SUBMITTED_BASE if "moziverzum.club" in url.lower() else BASE
     req = Request(url, data=data, headers={"User-Agent": UA, "Referer": referer, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7"})
@@ -198,7 +199,7 @@ def fetch(url, data=None):
         FETCH_STATS["cf"] += 1
         xbmc.log("Filminvaziocc CF checker rejected response: %s" % url, xbmc.LOGWARNING)
         return ""
-    if data is None:
+    if data is None and use_cache:
         cache_write(url, body)
     return body
 
@@ -526,6 +527,7 @@ def home():
         (colorize("Premier filmek", GOLD), plugin_url(action="listing", url=BASE + "filmek/premier-filmek/"), True, os.path.join(ICON_DIR, "premieres.png")),
         (colorize("Legnézettebb", GOLD), plugin_url(action="listing", url=BASE + "trending"), True, os.path.join(ICON_DIR, "popular.png")),
         (colorize("Kategóriák", ACCENT), plugin_url(action="category_menu"), True, os.path.join(ICON_DIR, "popular.png")),
+        (colorize("Keresés", GOLD), plugin_url(action="search"), True, os.path.join(ICON_DIR, "popular.png")),
         (colorize("Cache törlése", MUTED), plugin_url(action="cache_clear"), False, os.path.join(ICON_DIR, "cache.png")),
     ]
     xbmc.log("Filminvaziocc home: menu_items=%d" % len(items), xbmc.LOGDEBUG)
@@ -656,9 +658,90 @@ def search():
         xbmcplugin.endOfDirectory(HANDLE)
         return
     term = keyboard.getText().strip()
-    if term:
-        listing(BASE + "?" + urlencode({"s": term}))
-    else:
+    if not term:
+        xbmcplugin.endOfDirectory(HANDLE)
+        return
+    if len(term) < 3:
+        notify("Legalább 3 karaktert adj meg a kereséshez.", 2500)
+        xbmcplugin.endOfDirectory(HANDLE)
+        return
+
+    loading_start("Keresés: " + term)
+    try:
+        # A nonce dinamikus, ezért a kereső konfigurációjához frissen kérjük le a főoldalt.
+        home_html = fetch(BASE, use_cache=False)
+        if not home_html:
+            notify("A kereső beállításai nem tölthetők be.", 2500)
+            return
+
+        config_match = re.search(r'\bvar\s+dtGonza\s*=\s*\{(.*?)\};', home_html, re.I | re.S)
+        if not config_match:
+            raise RuntimeError("A DooPlay keresőkonfigurációja nem található a főoldalon")
+        config_text = config_match.group(1)
+        api_match = re.search(r'[\"\']api[\"\']\s*:\s*[\"\']([^\"\']+)', config_text)
+        nonce_match = re.search(r'[\"\']nonce[\"\']\s*:\s*[\"\']([^\"\']+)', config_text)
+        if not api_match or not nonce_match:
+            raise RuntimeError("A DooPlay kereső API-címe vagy nonce-a hiányzik")
+
+        api_url = urljoin(BASE, api_match.group(1))
+        api_parts = urlparse(api_url)
+        if api_parts.scheme != "https" or api_parts.netloc.lower() != urlparse(BASE).netloc.lower():
+            raise RuntimeError("A kereső API-címe nem a várt webhelyre mutat")
+        api_url += ("&" if "?" in api_url else "?") + urlencode({
+            "keyword": term,
+            "nonce": nonce_match.group(1),
+        })
+
+        response = fetch(api_url)
+        if not response:
+            notify("A kereső API most nem érhető el.", 2500)
+            return
+        try:
+            payload = json.loads(response)
+        except ValueError as exc:
+            raise RuntimeError("A kereső API érvénytelen JSON-választ adott") from exc
+
+        if isinstance(payload, dict) and payload.get("error"):
+            if payload.get("error") == "no_posts":
+                notify("Nincs találat erre: " + term, 2500)
+                return
+            raise RuntimeError("Kereső API hiba: %s" % payload.get("error"))
+
+        results = list(payload.values()) if isinstance(payload, dict) else payload
+        if not isinstance(results, list):
+            raise RuntimeError("A kereső API válasza nem találati lista")
+
+        added = 0
+        for result in results:
+            if not isinstance(result, dict):
+                continue
+            title = unescape(str(result.get("title", ""))).strip()
+            movie_url = urljoin(BASE, str(result.get("url", "")).strip())
+            parsed_movie_url = urlparse(movie_url)
+            if (not title or parsed_movie_url.scheme != "https"
+                    or parsed_movie_url.netloc.lower() != urlparse(BASE).netloc.lower()
+                    or not parsed_movie_url.path.startswith("/film/")):
+                continue
+
+            image = str(result.get("img", "")).strip()
+            if image:
+                image = urljoin(BASE, image)
+            extra = result.get("extra") or {}
+            year = str(extra.get("date", "")).strip() if isinstance(extra, dict) else ""
+            label = "%s (%s)" % (title, year) if year else title
+            add_item(label, plugin_url(action="movie", url=movie_url), True, image,
+                     {"title": title, "mediatype": "movie"})
+            added += 1
+
+        if not added:
+            notify("Nincs megjeleníthető találat erre: " + term, 2500)
+        else:
+            xbmc.log("Filminvaziocc search: term=%s results=%d" % (term, added), xbmc.LOGDEBUG)
+    except Exception as exc:
+        xbmc.log("Filminvaziocc search error: %s" % exc, xbmc.LOGERROR)
+        notify("A keresés nem sikerült.", 2500)
+    finally:
+        loading_stop()
         xbmcplugin.endOfDirectory(HANDLE)
 
 

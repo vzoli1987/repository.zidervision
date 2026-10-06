@@ -83,6 +83,30 @@ def save_search(value):
 
 LAST_SEARCH = load_search_history()
 
+
+def clear_search_history():
+    if not xbmcgui.Dialog().yesno("NapiFilm", "Biztosan törlöd a keresési előzményeket?"):
+        search_menu()
+        return
+    try:
+        temporary = STATE_PATH + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as state_file:
+            json.dump({"search_history": [], "last_search": ""}, state_file, ensure_ascii=False)
+        os.replace(temporary, STATE_PATH)
+        try:
+            ADDON.setSetting("last_search", "")
+        except Exception as exc:
+            xbmc.log("NapiFilm legacy search setting clear skipped: %s" % exc, xbmc.LOGWARNING)
+        LAST_SEARCH[:] = []
+    except Exception as exc:
+        xbmc.log("NapiFilm search history clear failed: %s" % exc, xbmc.LOGERROR)
+        xbmcgui.Dialog().notification("NapiFilm", "Az előzmények törlése nem sikerült", xbmcgui.NOTIFICATION_ERROR)
+        search_menu()
+        return
+    xbmcgui.Dialog().notification("NapiFilm", "A keresési előzmények törölve", xbmcgui.NOTIFICATION_INFO, 2500)
+    search_menu()
+
+
 def media_icon(name):
     return os.path.join(MEDIA_DIR, name + ".png")
 try:
@@ -930,6 +954,7 @@ def search_menu():
     add_folder("[B][COLOR deepskyblue]ÚJ KERESÉS[/COLOR][/B]", "__new_search__", media_icon("search"))
     history = load_search_history()
     if history:
+        add_folder("[COLOR tomato]KERESÉSI ELŐZMÉNYEK TÖRLÉSE[/COLOR]", "__clear_search_history__", media_icon("search"), "clear_search_history")
         for query in history:
             li = xbmcgui.ListItem(label="[COLOR lightblue]%s[/COLOR]" % query)
             li.setArt({"thumb": media_icon("search"), "icon": media_icon("search")})
@@ -949,6 +974,8 @@ elif action == "search_results":
     query = params.get("value", "").strip()
     if query:
         open_search_results(query)
+elif action == "clear_search_history":
+    clear_search_history()
 elif action == "series":
     series_detail(params.get("value", ""))
 elif action == "season":
