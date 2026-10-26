@@ -1,29 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.mozipont.catalog" name="MoziPont katalógus" version="0.2.1" provider-name="Manus">
+<addon id="plugin.video.mozipont.catalog" name="MoziPont katalógus" version="0.3.0" provider-name="Manus">
   <requires>
-    <!-- Kodi 19 (Matrix) és újabb verziókhoz -->
     <import addon="xbmc.python" version="3.0.0" />
-    <!-- A beágyazott videók (pl. Videa.hu) feloldásához elengedhetetlen -->
     <import addon="script.module.resolveurl" version="5.0.0" />
   </requires>
-  
+
   <extension point="xbmc.python.pluginsource" library="default.py">
     <provides>video</provides>
   </extension>
-  
+
   <extension point="xbmc.addon.metadata">
-    <summary lang="hu_HU">Nyilvános film- és sorozatkatalógus, beágyazott lejátszóval</summary>
-    <description lang="hu_HU">Katalógus böngészése, keresés, adatlapok megtekintése, beágyazott videók lejátszása (ResolveURL támogatással) és az oldalon előzetesként megjelölt YouTube-videók.</description>
+    <summary lang="hu_HU">Film- és sorozatkatalógus, keresés és lejátszás</summary>
+    <description lang="hu_HU">MoziPont katalógusböngészés, keresés, adatlapok, előzetesek és a nyilvánosan megadott külső lejátszóhivatkozások Kodi-kezelése.</description>
     <platform>all</platform>
     <license>MIT</license>
     <language>hu</language>
-    
-    <!-- Opcionális, de ajánlott: ha van icon.png és fanart.jpg a mappádban, tedd be őket -->
-    <assets>
-      <icon>icon.png</icon>
-      <fanart>fanart.jpg</fanart>
-    </assets>
-    
-    <news>v0.2.1: Beágyazott videók (iframe) kinyerése és ResolveURL integráció hozzáadva.</news>
+    <news>v0.3.0: Újraírt katalógus és tartós cache; javított lejátszási visszatérés.</news>
   </extension>
 </addon>

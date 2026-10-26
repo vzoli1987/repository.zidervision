@@ -1,61 +1,157 @@
 # -*- coding: utf-8 -*-
-"""MoziPont catalog parser with Cloudflare/Session bypass and rich metadata extraction."""
+"""MoziPont catalog client for Kodi.
+
+Only reads public catalog metadata and the player URL explicitly exposed by the
+MoziPont watch page. It does not decode obfuscated player data.
+"""
+from concurrent.futures import ThreadPoolExecutor
+from html import unescape
 from html.parser import HTMLParser
-from urllib.parse import parse_qs, urlparse
-import re
-import urllib.request
+import hashlib
 import http.cookiejar
 import json
+import os
+import re
+import time
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urljoin, urlparse, urlencode
+from urllib.request import Request, build_opener, HTTPCookieProcessor
 
 BASE = 'https://mozipont.com'
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0'
+USER_AGENT = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) '
+              'Gecko/20100101 Firefox/124.0')
+API_TTL = 900
+LIST_TTL = 180
+DETAIL_TTL = 600
+
+_COOKIE_JAR = http.cookiejar.CookieJar()
+_OPENER = build_opener(HTTPCookieProcessor(_COOKIE_JAR))
+
+
+def _log(message):
+    try:
+        import xbmc
+        xbmc.log('[MoziPont] ' + str(message), xbmc.LOGINFO)
+    except Exception:
+        pass
+
+
+def _cache_dir():
+    """Return a persistent per-addon cache directory when running in Kodi."""
+    try:
+        import xbmcaddon
+        import xbmcvfs
+        profile = xbmcvfs.translatePath(xbmcaddon.Addon().getAddonInfo('profile'))
+    except Exception:
+        profile = os.path.join(os.path.dirname(__file__), '.cache')
+    path = os.path.join(profile, 'http-cache')
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError:
+        return None
+    return path
+
+
+def _cache_file(key):
+    root = _cache_dir()
+    if not root:
+        return None
+    digest = hashlib.sha256(key.encode('utf-8')).hexdigest()
+    return os.path.join(root, digest + '.json')
+
+
+def _cache_get(key, ttl):
+    path = _cache_file(key)
+    if not path:
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as stream:
+            record = json.load(stream)
+        if time.time() - float(record.get('saved', 0)) <= ttl:
+            _log('cache hit: ' + key)
+            return record.get('value')
+    except (OSError, ValueError, TypeError):
+        pass
+    return None
+
+
+def _cache_put(key, value):
+    path = _cache_file(key)
+    if not path:
+        return
+    temp = path + '.tmp'
+    try:
+        with open(temp, 'w', encoding='utf-8') as stream:
+            json.dump({'saved': time.time(), 'value': value}, stream,
+                      ensure_ascii=False, separators=(',', ':'))
+        os.replace(temp, path)
+    except (OSError, TypeError, ValueError):
+        try:
+            if os.path.exists(temp):
+                os.remove(temp)
+        except OSError:
+            pass
+
+
+def _request(url, referer=None, accept='text/html'):
+    headers = {
+        'User-Agent': USER_AGENT,
+        'Accept': accept + ',*/*;q=0.8',
+        'Accept-Language': 'hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Connection': 'keep-alive',
+    }
+    if referer:
+        headers['Referer'] = referer
+    request = Request(url, headers=headers)
+    try:
+        with _OPENER.open(request, timeout=12) as response:
+            body = response.read().decode('utf-8', 'replace')
+            return body, response.getcode()
+    except HTTPError as exc:
+        try:
+            body = exc.read().decode('utf-8', 'replace') if exc.fp else ''
+        except Exception:
+            body = ''
+        return body, exc.code
+    except (URLError, OSError, TimeoutError) as exc:
+        _log('network error for ' + urlparse(url).path + ': ' + repr(exc))
+        return '', 0
+
+
+def _safe_url(path, query=None):
+    if not isinstance(path, str) or not path.startswith('/') or path.startswith('//'):
+        raise ValueError('Invalid MoziPont path')
+    url = BASE + path
+    if query:
+        url += '?' + urlencode(query)
+    return url
+
+
+def fetch(path, query=None, ttl=None):
+    """Fetch and cache a public HTML catalog page."""
+    url = _safe_url(path, query)
+    cache_ttl = ttl if ttl is not None else (LIST_TTL if path in ('/filmek', '/sorozatok', '/kereses') else DETAIL_TTL)
+    cached = _cache_get('html:' + url, cache_ttl)
+    if isinstance(cached, str):
+        return cached
+    _log('HTTP GET ' + urlparse(url).path)
+    body, status = _request(url, referer=BASE + '/')
+    if status != 200:
+        raise ConnectionError('MoziPont returned HTTP ' + str(status) + ' for ' + path)
+    _cache_put('html:' + url, body)
+    return body
+
 
 _CARD_PATH = re.compile(r'^/(film|sorozat)/(\d+)/?$')
 _YT_ID = re.compile(r'^[A-Za-z0-9_-]{6,20}$')
 _YOUTUBE_HOSTS = {
-    'youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtube-nocookie.com',
-    'www.youtube-nocookie.com', 'youtu.be', 'www.youtu.be',
+    'youtube.com', 'www.youtube.com', 'm.youtube.com',
+    'youtube-nocookie.com', 'www.youtube-nocookie.com',
+    'youtu.be', 'www.youtu.be',
 }
 
-_cookie_jar = http.cookiejar.CookieJar()
-_opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(_cookie_jar))
 
-def _log(msg):
-    try:
-        import xbmc
-        xbmc.log(f"[MoziPont DEBUG] {msg}", xbmc.LOGINFO)
-    except ImportError:
-        print(f"[MoziPont DEBUG] {msg}")
-
-def _make_request(url, referer=None, accept='text/html'):
-    headers = {
-        'User-Agent': USER_AGENT,
-        'Accept': f'{accept},*/*;q=0.8',
-        'Accept-Language': 'hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-    }
-    if referer:
-        headers['Referer'] = referer
-        
-    req = urllib.request.Request(url, headers=headers)
-    try:
-        response = _opener.open(req, timeout=15)
-        return response.read().decode('utf-8', 'replace'), response.getcode()
-    except urllib.error.HTTPError as e:
-        return e.read().decode('utf-8', 'replace') if e.fp else '', e.code
-    except Exception as e:
-        return str(e), 0
-
-def _init_session():
-    try:
-        _make_request(BASE)
-    except Exception:
-        pass
-
-_init_session()
-
-def _youtube_video_id(url):
+def _youtube_id(url):
     parsed = urlparse(url)
     host = (parsed.hostname or '').lower()
     if host not in _YOUTUBE_HOSTS:
@@ -63,63 +159,54 @@ def _youtube_video_id(url):
     video_id = ''
     if host.endswith('youtu.be'):
         video_id = parsed.path.strip('/').split('/', 1)[0]
+    elif parsed.path.rstrip('/') == '/watch':
+        video_id = parse_qs(parsed.query).get('v', [''])[0]
     else:
-        if parsed.path.rstrip('/') == '/watch':
-            video_id = parse_qs(parsed.query).get('v', [''])[0]
-        else:
-            match = re.match(r'^/(?:embed|shorts)/([A-Za-z0-9_-]+)', parsed.path)
-            if match:
-                video_id = match.group(1)
-    return video_id if _YT_ID.match(video_id or '') else ''
+        match = re.match(r'^/(?:embed|shorts)/([A-Za-z0-9_-]+)', parsed.path)
+        if match:
+            video_id = match.group(1)
+    return video_id if _YT_ID.fullmatch(video_id or '') else ''
 
-class _CatalogParser(HTMLParser):
+
+class _PageParser(HTMLParser):
     def __init__(self):
-        HTMLParser.__init__(self, convert_charrefs=True)
+        super().__init__(convert_charrefs=True)
         self.cards = []
         self.current = None
-        self.current_youtube = None
-        self.trailer_id = ''
         self.h1 = []
         self.in_h1 = 0
+        self.meta = {}
         self.paragraphs = []
         self.in_p = 0
         self.current_p = []
-        self.meta = {}
-        
-        self.in_card = 0
-        self.in_strong = 0
-        self.in_small = 0
-        self.in_label = 0
-        self.in_age = 0
-        self.in_rating = 0
-        self.in_hd = 0
-        self.in_tag = 0
+        self.youtube_link = None
+        self.trailer_id = ''
+        self._flags = {'strong': 0, 'small': 0, 'label': 0,
+                       'age': 0, 'rating': 0, 'tag': 0}
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         if tag == 'meta':
-            key = attrs.get('property') or attrs.get('name')
+            key = (attrs.get('property') or attrs.get('name') or '').lower()
             if key and attrs.get('content'):
-                self.meta[key.lower()] = attrs['content'].strip()
+                self.meta[key] = attrs['content'].strip()
         elif tag == 'a':
             href = attrs.get('href', '')
-            class_attr = attrs.get('class', '')
             parsed = urlparse(href)
             match = _CARD_PATH.match(parsed.path)
-            
-            if 'media-card' in class_attr and match and (not parsed.netloc or parsed.netloc.lower() in ('mozipont.com', 'www.mozipont.com')):
-                self.in_card += 1
+            classes = attrs.get('class', '').split()
+            if 'media-card' in classes and match and (not parsed.netloc or parsed.hostname in ('mozipont.com', 'www.mozipont.com')):
                 self.current = {
                     'path': parsed.path, 'kind': match.group(1), 'id': match.group(2),
-                    'title': '', 'year_type': '', 'poster': '',
-                    'label': '', 'age': '', 'rating': '', 'hd': False, 'tags': []
+                    'title': '', 'year_type': '', 'poster': '', 'label': '',
+                    'age': '', 'rating': '', 'hd': False, 'tags': []
                 }
+                self._flags = {'strong': 0, 'small': 0, 'label': 0,
+                               'age': 0, 'rating': 0, 'tag': 0}
             elif (parsed.hostname or '').lower() in _YOUTUBE_HOSTS:
-                self.current_youtube = {'href': href, 'text': [attrs.get('aria-label', ''), attrs.get('title', '')]}
+                self.youtube_link = {'href': href, 'text': [attrs.get('aria-label', ''), attrs.get('title', '')]}
         elif tag == 'img' and self.current is not None:
-            image = attrs.get('src') or attrs.get('data-src') or ''
-            if image and not self.current['poster']:
-                self.current['poster'] = image
+            self.current['poster'] = self.current['poster'] or attrs.get('src') or attrs.get('data-src') or ''
         elif tag == 'h1':
             self.in_h1 += 1
         elif tag == 'p':
@@ -127,283 +214,270 @@ class _CatalogParser(HTMLParser):
             if self.in_p == 1:
                 self.current_p = []
         elif tag == 'strong' and self.current is not None:
-            self.in_strong += 1
+            self._flags['strong'] += 1
         elif tag == 'small' and self.current is not None:
-            self.in_small += 1
+            self._flags['small'] += 1
         elif tag == 'span' and self.current is not None:
-            class_attr = attrs.get('class', '')
-            if 'poster-label' in class_attr: self.in_label += 1
-            elif 'age-badge' in class_attr: self.in_age += 1
-            elif 'media-card__rating' in class_attr: self.in_rating += 1
-            elif 'media-card__hd' in class_attr: self.in_hd += 1
-            elif 'tag-badge' in class_attr: self.in_tag += 1
+            classes = attrs.get('class', '').split()
+            for cls, flag in (('poster-label', 'label'), ('age-badge', 'age'),
+                              ('media-card__rating', 'rating'), ('tag-badge', 'tag')):
+                if cls in classes:
+                    self._flags[flag] += 1
+            if 'media-card__hd' in classes:
+                self.current['hd'] = True
 
     def handle_endtag(self, tag):
-        if tag == 'a' and self.in_card:
-            self.in_card -= 1
-            if self.current:
-                self.current['title'] = self.current['title'].strip()
-                self.current['year_type'] = self.current['year_type'].strip()
-                self.current['label'] = self.current['label'].strip()
-                self.current['age'] = self.current['age'].strip()
-                self.current['rating'] = self.current['rating'].strip()
-                if self.current['title']:
-                    self.cards.append(self.current)
+        if tag == 'a' and self.current is not None:
+            item = self.current
+            item['title'] = item['title'].strip()
+            if item['title']:
+                item['poster'] = urljoin(BASE + '/', item['poster']) if item['poster'] else ''
+                self.cards.append(item)
             self.current = None
-            self.in_strong = 0
-            self.in_small = 0
-            self.in_label = 0
-            self.in_age = 0
-            self.in_rating = 0
-            self.in_hd = 0
-            self.in_tag = 0
-        elif tag == 'a' and self.current_youtube is not None:
-            label = ' '.join(self.current_youtube['text']).casefold()
+            self._flags = {'strong': 0, 'small': 0, 'label': 0,
+                           'age': 0, 'rating': 0, 'tag': 0}
+        elif tag == 'a' and self.youtube_link is not None:
+            label = ' '.join(self.youtube_link['text']).casefold()
             if 'előzetes' in label and not self.trailer_id:
-                self.trailer_id = _youtube_video_id(self.current_youtube['href'])
-            self.current_youtube = None
+                self.trailer_id = _youtube_id(self.youtube_link['href'])
+            self.youtube_link = None
         elif tag == 'h1' and self.in_h1:
             self.in_h1 -= 1
         elif tag == 'p' and self.in_p:
             self.in_p -= 1
             if self.in_p == 0:
                 text = ' '.join(' '.join(self.current_p).split())
-                if text: self.paragraphs.append(text)
+                if text:
+                    self.paragraphs.append(text)
                 self.current_p = []
-        elif tag == 'strong' and self.in_strong:
-            self.in_strong -= 1
-        elif tag == 'small' and self.in_small:
-            self.in_small -= 1
+        elif tag in ('strong', 'small') and self._flags.get(tag, 0):
+            self._flags[tag] -= 1
         elif tag == 'span':
-            if self.in_label: self.in_label -= 1
-            if self.in_age: self.in_age -= 1
-            if self.in_rating: self.in_rating -= 1
-            if self.in_hd: self.in_hd -= 1
-            if self.in_tag: self.in_tag -= 1
+            for flag in ('label', 'age', 'rating', 'tag'):
+                if self._flags[flag]:
+                    self._flags[flag] -= 1
 
     def handle_data(self, data):
         if self.current is not None:
-            if self.in_strong:
+            if self._flags['strong']:
                 self.current['title'] += data
-            elif self.in_small:
+            elif self._flags['small']:
                 self.current['year_type'] += data
-            elif self.in_label:
+            elif self._flags['label']:
                 self.current['label'] += data
-            elif self.in_age:
+            elif self._flags['age']:
                 self.current['age'] += data
-            elif self.in_rating:
+            elif self._flags['rating']:
                 self.current['rating'] += data
-            elif self.in_tag and data.strip():
+            elif self._flags['tag'] and data.strip():
                 self.current['tags'].append(data.strip())
-        if self.current_youtube is not None and data.strip():
-            self.current_youtube['text'].append(data.strip())
+        if self.youtube_link is not None and data.strip():
+            self.youtube_link['text'].append(data.strip())
         if self.in_h1:
             self.h1.append(data.strip())
         if self.in_p:
             self.current_p.append(data.strip())
 
-def fetch(path, query=None):
-    if not isinstance(path, str) or not path.startswith('/') or path.startswith('//'):
-        raise ValueError('Invalid catalog path')
-    if path.startswith('/nezes/') or '/nezes/' in path:
-        raise ValueError('Use get_sources for playback routes')
-    url = BASE + path
-    if query:
-        from urllib.parse import urlencode
-        url += '?' + urlencode(query)
-    
-    _log(f"Fetching URL: {url}")
-    html, code = _make_request(url, referer=BASE + '/')
-    _log(f"Fetch response code: {code}, HTML length: {len(html) if html else 0}")
-    
-    if code != 200:
-        raise ConnectionError(f'Catalog fetch failed with HTTP {code}')
-    return html
 
-def parse_listing(html):
-    parser = _CatalogParser()
-    parser.feed(html)
-    _log(f"Parsed {len(parser.cards)} cards from HTML")
-    if parser.cards:
-        _log(f"First card example: {parser.cards[0]}")
-    
-    unique = []
-    seen = set()
-    for item in parser.cards:
-        key = (item['kind'], item['id'])
+def parse_listing(markup):
+    parser = _PageParser()
+    parser.feed(markup)
+    result, seen = [], set()
+    for card in parser.cards:
+        key = (card['kind'], card['id'])
         if key not in seen:
             seen.add(key)
-            unique.append(item)
-    _log(f"Returning {len(unique)} unique entries")
-    return unique
+            result.append(card)
+    return result
+
+
+def get_media_info(content_id):
+    content_id = str(content_id)
+    key = 'api:media:' + content_id
+    cached = _cache_get(key, API_TTL)
+    if isinstance(cached, dict):
+        return cached
+    url = BASE + '/api/media/' + content_id + '/info'
+    _log('HTTP GET /api/media/' + content_id + '/info')
+    body, status = _request(url, referer=BASE + '/', accept='application/json')
+    if status != 200:
+        return {'ok': False, 'title': '', 'description': '', 'year': 0,
+                'play': '', 'trailer': '', 'genres': [], 'duration': '',
+                'rating': '', 'age': '', 'hd': False}
+    try:
+        data = json.loads(body)
+    except (ValueError, TypeError):
+        return {'ok': False, 'title': '', 'description': '', 'year': 0,
+                'play': '', 'trailer': '', 'genres': [], 'duration': '',
+                'rating': '', 'age': '', 'hd': False}
+    result = {
+        'ok': True,
+        'title': data.get('title') or '',
+        'description': data.get('description') or '',
+        'year': data.get('year') or 0,
+        'play': data.get('play') or '',
+        'trailer': data.get('trailer') or '',
+        'genres': data.get('genres') or [],
+        'duration': data.get('duration') or '',
+        'rating': data.get('rating') or '',
+        'age': data.get('age') or '',
+        'hd': bool(data.get('hd')),
+    }
+    _cache_put(key, result)
+    return result
+
+
+def get_media_infos(content_ids):
+    """Fetch a small page of API metadata concurrently; cache remains on disk."""
+    ids = [str(value) for value in content_ids]
+    if not ids:
+        return []
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        return list(pool.map(get_media_info, ids))
+
 
 def get_genres(kind):
     path = '/filmek' if kind == 'films' else '/sorozatok'
-    html = fetch(path)
+    markup = fetch(path)
+    match = re.search(r'<select\b[^>]*name=["\']mufaj["\'][^>]*>(.*?)</select>',
+                      markup, re.I | re.S)
+    if not match:
+        return []
     genres = []
-    match = re.search(r'<select\s+name="mufaj"[^>]*>(.*?)</select>', html, re.IGNORECASE | re.DOTALL)
-    if match:
-        options = re.findall(r'<option\s+value="([^"]*)"[^>]*>([^<]*)</option>', match.group(1), re.IGNORECASE)
-        for val, name in options:
-            if val:
-                genres.append({'name': name.strip(), 'value': val.strip()})
+    for value, name in re.findall(r'<option\b[^>]*value=["\']([^"\']*)["\'][^>]*>(.*?)</option>', match.group(1), re.I | re.S):
+        clean_name = re.sub(r'<[^>]+>', '', name).strip()
+        if value:
+            genres.append({'name': unescape(clean_name), 'value': unescape(value)})
     return genres
 
-def parse_detail(html, kind, content_id):
-    parser = _CatalogParser()
-    parser.feed(html)
-    title = ' '.join(parser.h1).strip()
+
+def parse_detail(markup, kind, content_id):
+    parser = _PageParser()
+    parser.feed(markup)
+    title = ' '.join(part for part in parser.h1 if part).strip()
     if not title:
         title = parser.meta.get('og:title', '').split(' | ', 1)[0].strip()
     title = re.sub(r'\s+HD$', '', title).strip()
-    
-    desc_match = re.search(r'<p\s+class="detail__desc"[^>]*>(.*?)</p>', html, re.IGNORECASE | re.DOTALL)
-    if desc_match:
-        description = re.sub(r'<[^>]+>', '', desc_match.group(1))
-        description = re.sub(r'\s+', ' ', description).strip()
+
+    desc = re.search(r'<p\b[^>]*class=["\'][^"\']*detail__desc[^"\']*["\'][^>]*>(.*?)</p>', markup, re.I | re.S)
+    if desc:
+        description = re.sub(r'<[^>]+>', '', desc.group(1))
+        description = unescape(' '.join(description.split()))
     else:
         description = parser.meta.get('description', '').strip()
-        if description: description = re.sub(r'\s+', ' ', description)
-        if not description:
-            candidates = [p for p in parser.paragraphs if len(p) > 80 and 'MoziPont:' not in p]
-            description = candidates[0] if candidates else ''
 
     poster = parser.meta.get('og:image', '')
-    tags = re.findall(r'<span\s+class="tag-badge"[^>]*>(.*?)</span>', html, re.IGNORECASE)
-    tags = [re.sub(r'<[^>]+>', '', tag).strip() for tag in tags]
-    
-    year, genre, duration = '', '', 0
-    brief_match = re.search(r'<p\s+class="detail__brief"[^>]*>(.*?)</p>', html, re.IGNORECASE | re.DOTALL)
-    if brief_match:
-        brief_text = re.sub(r'<[^>]+>', '', brief_match.group(1)).strip()
-        parts = [p.strip() for p in brief_text.split('·')]
-        genres_list = []
-        for p in parts:
-            if re.match(r'^\d{4}$', p): year = p
-            elif re.search(r'\d+\s*(?:ó|óra)', p, re.I):
-                match = re.search(r'(\d+)\s*(?:ó|óra)\s*(?:(\d+)\s*p)?', p, re.I)
-                if match: duration = int(match.group(1)) * 60 + int(match.group(2) or 0)
-            else:
-                if p: genres_list.append(p)
-        genre = ' · '.join(genres_list)
-    else:
-        for candidate in (title, description):
-            found = re.search(r'\b(19\d{2}|20\d{2})\b', candidate)
-            if found: year = found.group(1); break
-        for paragraph in parser.paragraphs:
-            if re.search(r'\b(19\d{2}|20\d{2})\b', paragraph) and len(paragraph) < 180:
-                genre = paragraph
-                match = re.search(r'(\d+)\s*(?:ó|óra)\s*(?:(\d+)\s*p)?', paragraph, re.I)
-                if match: duration = int(match.group(1)) * 60 + int(match.group(2) or 0)
-                break
+    if poster:
+        poster = urljoin(BASE + '/', poster)
 
+    brief = re.search(r'<p\b[^>]*class=["\'][^"\']*detail__brief[^"\']*["\'][^>]*>(.*?)</p>', markup, re.I | re.S)
+    year, genre, duration = 0, '', ''
+    if brief:
+        brief_text = unescape(re.sub(r'<[^>]+>', '', brief.group(1)))
+        groups = [piece.strip() for piece in brief_text.split('·')]
+        genre_parts = []
+        for piece in groups:
+            if re.fullmatch(r'\d{4}', piece):
+                year = int(piece)
+            elif re.search(r'\d+\s*(?:ó|óra)', piece, re.I):
+                duration = piece
+            elif piece:
+                genre_parts.append(piece)
+        genre = ' · '.join(genre_parts)
+
+    tags = [unescape(re.sub(r'<[^>]+>', '', item)).strip()
+            for item in re.findall(r'<span\b[^>]*class=["\'][^"\']*tag-badge[^"\']*["\'][^>]*>(.*?)</span>', markup, re.I | re.S)]
+    tags = [item for item in tags if item]
     return {
         'title': title or 'MoziPont cím ' + str(content_id),
-        'description': description, 'poster': poster,
-        'year': int(year) if year else 0, 'genre': genre, 'duration': duration,
+        'description': description,
+        'poster': poster,
+        'year': year,
+        'genre': genre,
+        'duration': duration,
         'mediatype': 'movie' if kind == 'film' else 'tvshow',
-        'trailer_id': parser.trailer_id, 'tags': tags,
+        'trailer_id': parser.trailer_id,
+        'tags': tags,
     }
 
-def get_media_info(content_id):
-    """Gyors információ lekérése az API-ról (leírással együtt)."""
-    url = BASE + f'/api/media/{content_id}/info'
-    try:
-        html, code = _make_request(url, referer=BASE + '/')
-        if code == 200:
-            data = json.loads(html)
-            return {
-                'description': data.get('description', ''),
-                'genres': ' · '.join([g['name'] for g in data.get('genres', [])]),
-                'duration': data.get('duration', ''),
-                'country': data.get('country', ''),
-            }
-    except Exception as e:
-        _log(f"API info error for {content_id}: {repr(e)}")
-    return {'description': '', 'genres': '', 'duration': '', 'country': ''}
 
-def get_series_seasons(series_id):
-    url = BASE + f'/sorozat/{series_id}/reszek/1'
-    html, code = _make_request(url, referer=BASE + f'/sorozat/{series_id}')
-    seasons = []
-    if code == 200:
-        _log(f"Seasons page fetched successfully for series {series_id}")
-        match = re.search(r'<div\s+class="season-tabs"[^>]*>(.*?)</div>', html, re.IGNORECASE | re.DOTALL)
+def _extract_player_url(markup):
+    iframe = re.search(r'<iframe\b([^>]*)>', markup, re.I | re.S)
+    if not iframe:
+        return ''
+    attrs = iframe.group(1)
+    # Current MoziPont pages expose the player URL in data-t. Prefer a normal
+    # src if present, then accept the public data-t/data-src attributes.
+    for name in ('src', 'data-t', 'data-src'):
+        match = re.search(r'\b' + name + r'\s*=\s*["\']([^"\']+)["\']', attrs, re.I)
         if match:
-            _log("Found season-tabs div")
-            tabs_html = match.group(1)
-            tab_matches = re.findall(r'<button\b(?=[^>]*data-season="(\d+)")(?=[^>]*data-count="(\d+)")[^>]*>(.*?)</button>', tabs_html, re.IGNORECASE | re.DOTALL)
-            _log(f"Found {len(tab_matches)} season buttons")
-            for season_num, count, label in tab_matches:
-                seasons.append({
-                    'season': int(season_num),
-                    'count': int(count),
-                    'label': re.sub(r'<[^>]+>', '', label).strip()
-                })
-        else:
-            _log("season-tabs div NOT found in HTML")
-    else:
-        _log(f"Failed to fetch seasons page, HTTP code: {code}")
-    return seasons
+            value = unescape(match.group(1)).strip()
+            if value:
+                return urljoin(BASE + '/', value)
+    return ''
 
-def get_episodes_for_season(series_id, season):
-    url = BASE + f'/sorozat/{series_id}/reszek/{season}'
-    html, code = _make_request(url, referer=BASE + f'/sorozat/{series_id}')
-    episodes = []
-    if code == 200:
-        match = re.search(r'<noscript>.*?<ul class="episode-plain">(.*?)</ul>.*?</noscript>', html, re.IGNORECASE | re.DOTALL)
-        if match:
-            ul_html = match.group(1)
-            ep_matches = re.findall(r'<a href="(/nezes/\d+/\d+x\d+)">([^<]+)</a>', ul_html, re.IGNORECASE)
-            for href, title in ep_matches:
-                episodes.append({'href': href, 'title': title.strip()})
-    return episodes
 
-def get_sources_from_url(watch_url, referer):
-    sources = []
-    html, code = _make_request(watch_url, referer=referer)
-    if code != 200:
-        return sources
+def _source_record(url):
+    host = (urlparse(url).hostname or '').lower()
+    host = host[4:] if host.startswith('www.') else host
+    name = host[:1].upper() + host[1:] if host else 'Lejátszó'
+    return {'name': name, 'url': url, 'is_trailer': False}
 
-    if "Ez a tartalom egyelőre még nem jött ki, vagy nincs hozzá megbízható forrás." in html:
-        return sources
 
-    match = re.search(r'<iframe[^>]+(?:src|data-t|data-src)=["\']([^"\']+)["\']', html, re.IGNORECASE)
-    if match:
-        src = match.group(1)
-        if src.startswith('//'): src = 'https:' + src
-        elif src.startswith('/'): src = BASE + src
-        
-        parsed = urlparse(src)
-        hostname = parsed.hostname.replace('www.', '') if parsed.hostname else 'Ismeretlen'
-        source_name = hostname[0].upper() + hostname[1:] if hostname else 'Ismeretlen'
-        
-        sources.append({'name': source_name, 'url': src, 'is_trailer': False})
-        
-    return sources
+def get_sources_from_url(watch_url, referer=None):
+    if not watch_url.startswith(BASE + '/'):
+        raise ValueError('Invalid watch URL')
+    body, status = _request(watch_url, referer=referer or BASE + '/')
+    if status != 200:
+        return []
+    player_url = _extract_player_url(body)
+    return [_source_record(player_url)] if player_url else []
+
 
 def get_sources(content_id):
-    """Filmekhez: kinyeri a forrásokat a /nezes/{id} oldalról (SZÓTÁRT ad vissza)."""
-    watch_url = BASE + f'/nezes/{content_id}'
-    html, code = _make_request(watch_url, referer=BASE + f'/film/{content_id}')
-    
-    sources = []
-    unavailable_msg = ''
-    
-    if code == 200:
-        if "Ez a tartalom egyelőre még nem jött ki, vagy nincs hozzá megbízható forrás." in html:
-            unavailable_msg = "Ez a tartalom egyelőre még nem jött ki, vagy nincs hozzá megbízható forrás."
-        else:
-            match = re.search(r'<iframe[^>]+(?:src|data-t|data-src)=["\']([^"\']+)["\']', html, re.IGNORECASE)
-            if match:
-                src = match.group(1)
-                if src.startswith('//'): src = 'https:' + src
-                elif src.startswith('/'): src = BASE + src
-                
-                parsed = urlparse(src)
-                hostname = parsed.hostname.replace('www.', '') if parsed.hostname else 'Ismeretlen'
-                source_name = hostname[0].upper() + hostname[1:] if hostname else 'Ismeretlen'
-                
-                sources.append({'name': source_name, 'url': src, 'is_trailer': False})
-                
-    return {'sources': sources, 'unavailable_msg': unavailable_msg}
+    content_id = str(content_id)
+    if not content_id.isdigit():
+        return {'sources': [], 'unavailable_msg': ''}
+    watch_url = BASE + '/nezes/' + content_id
+    body, status = _request(watch_url, referer=BASE + '/film/' + content_id)
+    if status != 200:
+        return {'sources': [], 'unavailable_msg': ''}
+    unavailable = 'Ez a tartalom egyelőre még nem jött ki, vagy nincs hozzá megbízható forrás.'
+    if unavailable in body:
+        return {'sources': [], 'unavailable_msg': unavailable}
+    player_url = _extract_player_url(body)
+    sources = [_source_record(player_url)] if player_url else []
+    return {'sources': sources, 'unavailable_msg': ''}
+
+
+def get_series_seasons(series_id):
+    sid = str(series_id)
+    if not sid.isdigit():
+        return []
+    url = BASE + '/sorozat/' + sid + '/reszek/1'
+    body, status = _request(url, referer=BASE + '/sorozat/' + sid)
+    if status != 200:
+        return []
+    block = re.search(r'<div\b[^>]*class=["\'][^"\']*season-tabs[^"\']*["\'][^>]*>(.*?)</div>', body, re.I | re.S)
+    if not block:
+        return []
+    seasons = []
+    pattern = re.compile(r'<button\b(?=[^>]*data-season=["\'](\d+)["\'])(?=[^>]*data-count=["\'](\d+)["\'])[^>]*>(.*?)</button>', re.I | re.S)
+    for season, count, label in pattern.findall(block.group(1)):
+        seasons.append({'season': int(season), 'count': int(count),
+                        'label': unescape(re.sub(r'<[^>]+>', '', label)).strip()})
+    return seasons
+
+
+def get_episodes_for_season(series_id, season):
+    sid, season = str(series_id), str(season)
+    if not sid.isdigit() or not season.isdigit():
+        return []
+    url = BASE + '/sorozat/' + sid + '/reszek/' + season
+    body, status = _request(url, referer=BASE + '/sorozat/' + sid)
+    if status != 200:
+        return []
+    episodes = []
+    for href, title in re.findall(r'<a\b[^>]*href=["\'](/nezes/\d+/\d+x\d+)["\'][^>]*>(.*?)</a>', body, re.I | re.S):
+        episodes.append({'href': href, 'title': unescape(re.sub(r'<[^>]+>', '', title)).strip()})
+    return episodes
