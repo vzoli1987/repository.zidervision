@@ -120,7 +120,10 @@ def collect_sources(group, logger=None, on_progress=None):
     unique, seen = [], set()
     for source in sources:
         source['adapter_name'] = source.get('adapter_name') or 'Ismeretlen forrás'
-        key = (source['adapter_name'], source.get('host', ''), source.get('play_url', ''))
+        key = (
+            source['adapter_name'], source.get('host', ''),
+            source.get('source_url', '') or source.get('source_page_url', '') or source.get('play_url', '')
+        )
         if key in seen:
             continue
         seen.add(key)

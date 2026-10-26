@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-UA = 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.3.0) AppleWebKit/537.36'
+UA = 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.7.5) AppleWebKit/537.36'
 CHALLENGE_MARKERS = (
     'cf-chl-captcha-container', 'cf-chl-widget', 'Just a moment...',
     'Attention Required! | Cloudflare', 'Enable JavaScript and cookies to continue'

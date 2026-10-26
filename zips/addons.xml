@@ -302,7 +302,7 @@
             <news>v0.3.0: Újraírt katalógus és tartós cache; javított lejátszási visszatérés.</news>
         </extension>
     </addon>
-    <addon id="plugin.video.mozipremierek" name="Mozipremierek.hu" version="1.6.8" provider-name="Community">
+    <addon id="plugin.video.mozipremierek" name="Mozipremierek.hu" version="1.7.5" provider-name="Community">
         <requires>
             <import addon="xbmc.python" version="3.0.0" />
             <import addon="script.module.resolveurl" version="5.1.0" optional="true" />
@@ -319,7 +319,7 @@
             <license>MIT</license>
             <website>https://mozipremierek.hu/</website>
             <source>https://mozipremierek.hu/</source>
-            <news>1.6.8: Filminvázió.cc beküldött linkek közvetlen, parent oldali feloldása; HTTP 404 és hiányzó embed esetén látható hibajelzés és failover a következő hostra.</news>
+            <news>1.7.5: A hostkeresési progress minőségi darabszámai 4K, 1080p, 720p, HD, SD, DVD és CAM kategóriánként külön színűek.</news>
             <assets>
                 <icon>icon.png</icon>
             </assets>

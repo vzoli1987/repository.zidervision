@@ -43,7 +43,7 @@ ADDON_ID = ADDON.getAddonInfo('id')
 BASE = 'https://mozipremierek.hu'
 HANDLE = int(sys.argv[1])
 PLUGIN_BASE = sys.argv[0]
-HOST_CACHE_SCHEMA = 2
+HOST_CACHE_SCHEMA = 5
 
 
 class SiteParser(HTMLParser):
@@ -289,7 +289,7 @@ def fetch_page(path):
     # Kodi's Python HTTP client needs percent-encoded non-ASCII genre slugs.
     url = quote(url, safe=":/?&=%#[]@!$'()*+,;")
     request = Request(url, headers={
-        'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.2.0) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.7.5) AppleWebKit/537.36',
         'Accept': 'text/html,application/xhtml+xml'
     })
     try:
@@ -506,7 +506,7 @@ def add_movie(entry, metadata=None):
     if metadata.get('premiered'):
         facts.append('Premier: ' + metadata['premiered'])
     if facts:
-        info['plot'] = (plot + '\n\n' if plot else '') + '  •  '.join(facts)
+        info['plot'] = (plot + '\n\n' if plot else '') + '  |  '.join(facts)
     item = xbmcgui.ListItem(
         label='[COLOR FFD9B15F]%s[/COLOR]' % title,
         label2='[COLOR FF7DC8D2]%s[/COLOR]' % subtitle if subtitle else ''
@@ -537,7 +537,7 @@ def add_trailer(entry):
     video_id = entry.get('youtube_id')
     if not video_id:
         return
-    label = '[COLOR FFD9B15F]>> [/COLOR]  [COLOR FF7DC8D2]%s[/COLOR]' % title
+    label = '[COLOR FFB17CFF]>> ELŐZETES[/COLOR]  [COLOR FFE9D5FF]%s[/COLOR]' % title
     item = xbmcgui.ListItem(label=label)
     set_video_info(item, {'title': title, 'mediatype': 'video'})
     thumb = 'https://i.ytimg.com/vi/%s/hqdefault.jpg' % video_id
@@ -566,10 +566,10 @@ def show_root():
 def show_years():
     year = datetime.date.today().year
     for y in range(year, year - 12, -1):
-        add_folder('Mozis premierek – %d' % y, 'list', path='/filmek/%d/' % y)
-        add_folder('Mozis műfajok – %d' % y, 'genres', mode='filmek', year=y)
-        add_folder('Online nézhető – %d' % y, 'list', path='/streaming/%d/' % y)
-        add_folder('Streaming műfajok – %d' % y, 'genres', mode='streaming', year=y)
+        add_folder('Mozis premierek - %d' % y, 'list', path='/filmek/%d/' % y)
+        add_folder('Mozis műfajok - %d' % y, 'genres', mode='filmek', year=y)
+        add_folder('Online nézhető - %d' % y, 'list', path='/streaming/%d/' % y)
+        add_folder('Streaming műfajok - %d' % y, 'genres', mode='streaming', year=y)
     finish('files')
 
 
@@ -637,7 +637,7 @@ def show_list(path, provider='', page=1):
     for entry in page_entries:
         add_movie(entry, metadata.get(entry.get('href', ''), {}))
     if page < pages:
-        add_folder('Következő oldal /// (%d/%d)' % (page + 1, pages), 'list', path=path.split('?')[0], provider=provider, page=page + 1)
+        add_folder('További filmek -> (%d/%d)' % (page + 1, pages), 'list', path=path.split('?')[0], provider=provider, page=page + 1)
     finish('movies')
 
 
@@ -677,6 +677,34 @@ def quality_counts():
     return {'4K': 0, '1080p': 0, '720p': 0, 'HD': 0, 'SD': 0, 'DVD': 0, 'CAM': 0, 'Egyéb': 0, 'Összesen': 0}
 
 
+def source_quality_sort_key(source):
+    quality = str(source.get('quality', '') or '').upper()
+    if '2160' in quality or '4K' in quality or 'UHD' in quality:
+        rank = 0
+    elif '1440' in quality or '2K' in quality:
+        rank = 1
+    elif '1080' in quality:
+        rank = 2
+    elif '720' in quality:
+        rank = 3
+    elif 'HD' in quality:
+        rank = 4
+    elif 'DVD' in quality:
+        rank = 5
+    elif '480' in quality or '360' in quality or 'SD' in quality:
+        rank = 6
+    elif 'CAM' in quality or 'TS' == quality.strip():
+        rank = 7
+    else:
+        rank = 8
+    return (
+        rank,
+        str(source.get('adapter_name', '')).casefold(),
+        str(source.get('host', '')).casefold(),
+        str(source.get('language', '')).casefold()
+    )
+
+
 def add_quality_counts(counts, sources):
     for source in sources:
         quality = str(source.get('quality', '')).upper()
@@ -700,18 +728,31 @@ def add_quality_counts(counts, sources):
         counts['Összesen'] += 1
 
 
-def update_source_progress(progress, percent, page_name, remaining, counts):
-    line1 = '[COLOR FFD9B15F]4K:[/COLOR] [COLOR FF55C7C2]%d[/COLOR]  |  [COLOR FFD9B15F]1080p:[/COLOR] [COLOR FF55C7C2]%d[/COLOR]  |  [COLOR FFD9B15F]720p:[/COLOR] [COLOR FF55C7C2]%d[/COLOR]  |  [COLOR FFD9B15F]HD:[/COLOR] [COLOR FF55C7C2]%d[/COLOR]' % (
-        counts['4K'], counts['1080p'], counts['720p'], counts['HD']
+def update_source_progress(progress, percent, page_name, completed, total, counts, phase):
+    percent = max(0, min(100, int(percent)))
+    frames = ('[>   ]', '[=>  ]', '[==> ]', '[===>]')
+    frame = frames[(int(completed) + percent) % len(frames)]
+    line1 = '[COLOR FFBCA8E8]%s[/COLOR]  [COLOR FF72D5C9]%s[/COLOR]  [COLOR FFFF9E64]%d%%[/COLOR]' % (
+        phase, frame, percent
     )
-    line2 = '[COLOR FFD9B15F]SD:[/COLOR] [COLOR FF55C7C2]%d[/COLOR]  |  [COLOR FFD9B15F]DVD:[/COLOR] [COLOR FF55C7C2]%d[/COLOR]  |  [COLOR FFD9B15F]CAM:[/COLOR] [COLOR FF55C7C2]%d[/COLOR]  |  [COLOR FFD9B15F]Egyéb:[/COLOR] [COLOR FF55C7C2]%d[/COLOR]  |  [COLOR FFD9B15F]Összesen:[/COLOR] [COLOR FFFF9E64]%d[/COLOR]' % (
-        counts['SD'], counts['DVD'], counts['CAM'], counts['Egyéb'], counts['Összesen']
+    line2 = '[COLOR FFE6ECF2]Aktuális:[/COLOR] [COLOR FFD9B15F]%s[/COLOR]  [COLOR FF72D5C9]%d/%d[/COLOR]' % (
+        page_name, max(0, int(completed)), max(1, int(total))
     )
-    line3 = '[COLOR FFE6ECF2]Források eddig:[/COLOR] [COLOR FFFF9E64]%d[/COLOR]  |  [COLOR FF72D5C9]Oldal:[/COLOR] %s  |  [COLOR FF72D5C9]Hátralévő adapterek:[/COLOR] %d' % (
-        counts['Összesen'], page_name, max(0, remaining)
+    line3 = (
+        '[COLOR FFBCA8E8]4K %d[/COLOR] | '
+        '[COLOR FF72D5C9]1080p %d[/COLOR] | '
+        '[COLOR FF77B5FF]720p %d[/COLOR] | '
+        '[COLOR FF66CC88]HD %d[/COLOR] | '
+        '[COLOR FFA7B0BA]SD %d[/COLOR] | '
+        '[COLOR FFFFB86C]DVD %d[/COLOR] | '
+        '[COLOR FFFF7777]CAM %d[/COLOR]  '
+        '[COLOR FFE6ECF2]Össz: [COLOR FFFF9E64]%d[/COLOR][/COLOR]'
+    ) % (
+        counts['4K'], counts['1080p'], counts['720p'], counts['HD'],
+        counts['SD'], counts['DVD'], counts['CAM'], counts['Összesen']
     )
     # Kodi 21's Python DialogProgress.update accepts percent plus one message.
-    progress.update(max(0, min(100, int(percent))), '\n'.join((line1, line2, line3)))
+    progress.update(percent, '\n'.join((line1, line2, line3)))
 
 
 def save_source_queue(title, sources):
@@ -777,7 +818,7 @@ def add_adapter_hosts(title, path):
     errors = []
     counts = quality_counts()
     progress = xbmcgui.DialogProgress()
-    progress.create('Hostok betöltése – %s' % title, 'Adapterek keresése indul...')
+    progress.create('HOSTKERESÉS  |  %s' % title, 'Forrásoldalak előkészítése...')
     cancelled = False
     total_adapters = len(ADAPTERS)
     try:
@@ -787,7 +828,7 @@ def add_adapter_hosts(title, path):
                 break
             update_source_progress(
                 progress, int(25 * index / max(1, total_adapters)),
-                adapter.name, total_adapters - index, counts
+                adapter.name, index, total_adapters, counts, 'FORRÁSKERESÉS'
             )
             try:
                 records.extend(adapter.search(title) or [])
@@ -796,7 +837,7 @@ def add_adapter_hosts(title, path):
                 xbmc.log('%s adapter search failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
             update_source_progress(
                 progress, int(25 * (index + 1) / max(1, total_adapters)),
-                adapter.name, total_adapters - index - 1, counts
+                adapter.name, index + 1, total_adapters, counts, 'FORRÁSKERESÉS'
             )
     except Exception as exc:
         errors.append('Adapter keresés: %s' % exc)
@@ -845,7 +886,7 @@ def add_adapter_hosts(title, path):
                     break
                 update_source_progress(
                     progress, 25 + int(75 * index / max(1, len(tasks))), adapter.name,
-                    len(tasks) - index, counts
+                    index, len(tasks), counts, 'HOSTOK KIOLVASÁSA'
                 )
                 try:
                     found = adapter.sources(movie) or []
@@ -854,7 +895,8 @@ def add_adapter_hosts(title, path):
                         source['adapter_name'] = source.get('adapter_name') or adapter.name
                         key = (
                             source['adapter_name'], str(source.get('host', '')).casefold(),
-                            str(source.get('quality', '')).casefold(), str(source.get('language', '')).casefold()
+                            str(source.get('quality', '')).casefold(), str(source.get('language', '')).casefold(),
+                            str(source.get('source_url') or source.get('source_page_url') or source.get('play_url', '')).casefold()
                         )
                         if key not in seen:
                             seen.add(key)
@@ -866,7 +908,7 @@ def add_adapter_hosts(title, path):
                     xbmc.log('%s source listing failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
                 update_source_progress(
                     progress, 25 + int(75 * (index + 1) / max(1, len(tasks))), adapter.name,
-                    len(tasks) - index - 1, counts
+                    index + 1, len(tasks), counts, 'HOSTOK KIOLVASÁSA'
                 )
         except Exception as exc:
             errors.append('Forráslista: %s' % exc)
@@ -883,7 +925,8 @@ def add_adapter_hosts(title, path):
 
 def render_host_rows(title, sources, cancelled=False, errors=None):
     errors = errors or []
-    header = xbmcgui.ListItem(label='[COLOR FF65758B]          %s · FILMHOSTOK          [/COLOR]' % title)
+    sources = sorted(sources, key=source_quality_sort_key)
+    header = xbmcgui.ListItem(label='[COLOR FF65758B]--- %s | FILMHOSTOK ---[/COLOR]' % title)
     header.setProperty('IsPlayable', 'false')
     xbmcplugin.addDirectoryItem(HANDLE, plugin_url('noop'), header, False)
     if not sources:
@@ -901,12 +944,12 @@ def render_host_rows(title, sources, cancelled=False, errors=None):
     for index, source in enumerate(sources):
         host = re.sub(r'\[/?COLOR[^\]]*\]', '', str(source.get('host', 'ismeretlen host')), flags=re.I)
         provider = re.sub(r'\[/?COLOR[^\]]*\]', '', str(source.get('adapter_name', 'FORRÁS')), flags=re.I)
-        quality = re.sub(r'\[/?COLOR[^\]]*\]', '', str(source.get('quality', '') or '—'), flags=re.I)
-        language = re.sub(r'\[/?COLOR[^\]]*\]', '', str(source.get('language', '') or '—'), flags=re.I)
+        quality = re.sub(r'\[/?COLOR[^\]]*\]', '', str(source.get('quality', '') or 'N/A'), flags=re.I)
+        language = re.sub(r'\[/?COLOR[^\]]*\]', '', str(source.get('language', '') or 'N/A'), flags=re.I)
         label = (
-            '[COLOR FF55C7C2]%02d[/COLOR]  |  [COLOR FFD9B15F]%s[/COLOR]  |  '
-            '[COLOR FFE6ECF2]%s[/COLOR]  |  [COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFBCA8E8]%s[/COLOR]'
-        ) % (index + 1, provider, host, quality, language)
+            '[COLOR FFFD9B58]%s[/COLOR]  |  [COLOR FFE6ECF2]%s[/COLOR]  |  '
+            '[COLOR FFD9B15F]%s[/COLOR]  |  [COLOR FFBCA8E8]%s[/COLOR]'
+        ) % (quality, host, provider, language)
         item = xbmcgui.ListItem(label=label)
         set_video_info(item, {'title': title, 'mediatype': 'movie'})
         item.setProperty('IsPlayable', 'true')
@@ -942,7 +985,7 @@ def play_sources(token, start_index):
         return
 
     progress = xbmcgui.DialogProgress()
-    progress.create('Forrás ellenőrzése – %s' % title, 'Lejátszható host keresése indul...')
+    progress.create('Forrás ellenőrzése - %s' % title, 'Lejátszható host keresése indul...')
     remaining = len(sources) - start_index
     cancelled = False
     try:
@@ -976,7 +1019,7 @@ def play_sources(token, start_index):
                         xbmc.log('%s embed extraction failed at row %d (%s / %s): %s' % (ADDON_ID, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
                         lowered_error = error_text.lower()
                         if any(marker in lowered_error for marker in ('cloudflare', 'verification', 'captcha')):
-                            status = 'Cloudflare/ellenőrző oldal — nem kerüljük meg; következő forrás...'
+                            status = 'Cloudflare/ellenőrző oldal - nem kerüljük meg; következő forrás...'
                         elif '404' in lowered_error:
                             status = 'A beküldött link 404-es; következő host...'
                         else:
@@ -994,7 +1037,7 @@ def play_sources(token, start_index):
                         progress.update(
                             percent,
                             '[COLOR FFE6ECF2]Host-próba:[/COLOR] [COLOR FFFF9E64]%d/%d[/COLOR]\n'
-                            '[COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFD9B15F]%s → %s[/COLOR]\n'
+                            '[COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFD9B15F]%s => %s[/COLOR]\n'
                             '[COLOR FFE6ECF2]Feloldás és elérhetőség ellenőrzése...[/COLOR]' % (
                                 offset + 1, remaining, adapter_name, host, embed_host
                             )
@@ -1010,8 +1053,10 @@ def play_sources(token, start_index):
                             )
                         )
                         continue
-            if source_url and (zidervisionurlresolver or resolveurl):
-                stream = ''
+            stream = ''
+            if source_url and source.get('direct_stream') and source_url.startswith(('http://', 'https://')):
+                stream = source_url
+            elif source_url and (zidervisionurlresolver or resolveurl):
                 if zidervisionurlresolver:
                     try:
                         stream = resolved_stream_url(zidervisionurlresolver.resolve(source_url))
@@ -1024,9 +1069,14 @@ def play_sources(token, start_index):
                     except Exception as exc:
                         xbmc.log('%s ResolveURL failed at row %d (%s / %s): %s' % (ADDON_ID, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
                         stream = ''
-                if stream and stream_is_available(stream):
+            elif source_url and source.get('allow_raw_source') and source_url.startswith(('http://', 'https://')):
+                # FilmDepo's supplied addon also passes the player URL through unchanged
+                # when ResolveURL is not installed; availability checking still guards it.
+                stream = source_url
+            if stream:
+                if stream_is_available(stream):
                     xbmc.log('%s resolved row %d (%s / %s)' % (ADDON_ID, index + 1, adapter_name, host), xbmc.LOGINFO)
-                    progress.update(100, '[COLOR FF55C7C2]Forrás használható — lejátszás indítása:[/COLOR] [COLOR FFD9B15F]%s[/COLOR]' % host)
+                    progress.update(100, '[COLOR FF55C7C2]Forrás használható - lejátszás indítása:[/COLOR] [COLOR FFD9B15F]%s[/COLOR]' % host)
                     item = xbmcgui.ListItem(label=title, path=stream)
                     item.setProperty('IsPlayable', 'true')
                     set_video_info(item, {'title': title, 'mediatype': 'movie'})
@@ -1035,7 +1085,7 @@ def play_sources(token, start_index):
                 xbmc.log('%s resolved stream unavailable at row %d (%s / %s); continuing' % (ADDON_ID, index + 1, adapter_name, host), xbmc.LOGINFO)
             if source_url:
                 xbmc.log('%s direct source unavailable at row %d (%s / %s); continuing' % (ADDON_ID, index + 1, adapter_name, host), xbmc.LOGINFO)
-                if source.get('parent_resolve_only') and (zidervisionurlresolver or resolveurl):
+                if source.get('parent_resolve_only') and (source.get('direct_stream') or source.get('allow_raw_source') or zidervisionurlresolver or resolveurl):
                     continue
 
             # Preserve row identity: delegate only to this row's own player route.
@@ -1064,7 +1114,7 @@ def play_sources(token, start_index):
 def stream_is_available(url):
     """Lightweight availability check so a dead resolved link is skipped before playback."""
     target = url
-    headers = {'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.6.2)', 'Range': 'bytes=0-0'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.7.5)', 'Range': 'bytes=0-0'}
     if '|' in url:
         target, raw_headers = url.split('|', 1)
         for key, values in parse_qs(raw_headers, keep_blank_values=True).items():
