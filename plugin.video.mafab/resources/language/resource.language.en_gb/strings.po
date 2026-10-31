@@ -1,0 +1,72 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: en_GB\n"
+
+msgctxt "#30000"
+msgid "Trending (home page)"
+msgstr ""
+
+msgctxt "#30001"
+msgid "Search"
+msgstr ""
+
+msgctxt "#30002"
+msgid "Next page"
+msgstr ""
+
+msgctxt "#30003"
+msgid "Search for a movie or series"
+msgstr ""
+
+msgctxt "#30004"
+msgid "Trailers and videos"
+msgstr ""
+
+msgctxt "#30005"
+msgid "Choose a video"
+msgstr ""
+
+msgctxt "#30006"
+msgid "No playable video found on this page"
+msgstr ""
+
+msgctxt "#30007"
+msgid "The YouTube add-on is required for this video"
+msgstr ""
+
+msgctxt "#30008"
+msgid "Could not load the page (the site may block automated access)"
+msgstr ""
+
+msgctxt "#30009"
+msgid "Nothing found"
+msgstr ""
+
+msgctxt "#30010"
+msgid "TV schedule"
+msgstr ""
+
+msgctxt "#30011"
+msgid "Streaming providers"
+msgstr ""
+
+msgctxt "#30012"
+msgid "People"
+msgstr ""
+
+msgctxt "#30100"
+msgid "General"
+msgstr ""
+
+msgctxt "#30101"
+msgid "Cache lifetime (hours, 0 = off)"
+msgstr ""
+
+msgctxt "#30102"
+msgid "Debug logging (saves last page to the add-on profile)"
+msgstr ""
+
+msgctxt "#30103"
+msgid "Fetch details and fanart (plot, cast, rating)"
+msgstr ""
