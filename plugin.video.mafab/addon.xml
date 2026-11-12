@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.mafab" name="Mafab.hu" version="0.8.2" provider-name="ZiDER ViSiON">
+<addon id="plugin.video.mafab" name="Mafab.hu" version="0.8.8" provider-name="community">
   <requires>
     <import addon="xbmc.python" version="3.0.1"/>
     <import addon="script.module.requests" version="2.27.0"/>
@@ -19,5 +19,6 @@
     <platform>all</platform>
     <license>GPL-3.0-or-later</license>
     <language>hu en</language>
+    <news>0.8.8 - No hand-off to another add-on for a link the resolver already failed on; an unreachable domain is tried only once per attempt; 0.8.7 - Host search ignores same-title films of another year; 0.8.6 - Setting: list only hosts ResolveURL supports (default on); 0.8.5 - A host that hangs no longer freezes Kodi: 25 s limit per host, Cancel works during resolving; 0.8.4 - New setting: how many list items get full details (default 10), search shows 20 per page; 0.8.3 - Search shows 15 hits per page (details fetched only for those); 0.8.2 - Search: real result markup (all hits on one page, series flag, year, rating, art, genres), celebrities block; 0.8.1 - Search: tries the site's own /search/&search= URL first, ignores sidebar films in results; 0.8.0 - People menu (popular, actors, directors, writers, composers, cinematographers); 0.7.2 - TV list: time no longer shown twice; 0.7.1 - TV schedule: film/series decided by the site series filter; 0.7.0 - SOROZAT tag for series (lists, TV, info panel); 0.6.1 - provider read from each list card, working pagination, plot/premiere/genres/art from the list, upcoming + earlier streaming lists; 0.6.0 - streaming providers menu, coloured provider tags in the info panel; 0.5.1 - premiere date in the info panel; 0.5.0 - yellow year, facts line and credits in the info panel, more details from the detail page; 0.4.2 - year from list markup and more detail-page fallbacks; 0.4.1 - year shown in lists and on movie pages; 0.4.0 - plot, cast, rating and fanart from the detail pages; 0.3.0 - TV schedule; 0.2.2 - more menu entries (cinema, streaming, Netflix); 0.2.1 - year is stripped from source searches; 0.2.0 - host search by title through the adapters (filminvazio, filmdepo, napifilm); 0.1.1 - encoding fix</news>
   </extension>
 </addon>

@@ -15,6 +15,23 @@
             <popup>false</popup>
           </control>
         </setting>
+        <setting id="meta_limit" type="integer" label="30104">
+          <level>0</level>
+          <default>10</default>
+          <constraints>
+            <minimum>0</minimum>
+            <step>1</step>
+            <maximum>40</maximum>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>false</popup>
+          </control>
+        </setting>
+        <setting id="only_resolvable" type="boolean" label="30105">
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
         <setting id="fetch_meta" type="boolean" label="30103">
           <level>0</level>
           <default>true</default>

@@ -70,3 +70,11 @@ msgstr ""
 msgctxt "#30103"
 msgid "Fetch details and fanart (plot, cast, rating)"
 msgstr ""
+
+msgctxt "#30104"
+msgid "Items per page with full details (0 = none, rest show list data only)"
+msgstr ""
+
+msgctxt "#30105"
+msgid "List only hosts supported by ResolveURL"
+msgstr ""

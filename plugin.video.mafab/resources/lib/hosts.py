@@ -8,6 +8,7 @@ same way (ZiderVision/ResolveURL resolvers, per-row hand-off to other add-ons).
 """
 from __future__ import absolute_import
 
+import threading
 import hashlib
 import json
 import os
@@ -27,7 +28,7 @@ import xbmcplugin
 import xbmcvfs
 
 from .adapters import ADAPTERS
-from .aggregator import group_movies, normalize_title
+from .aggregator import _year, group_movies, normalize_title
 
 try:
     import resolveurl
@@ -256,6 +257,9 @@ def add_adapter_hosts(title, path):
 
     wanted = normalize_title(title)
     groups = group_movies(records)
+    want_year = _year(META.get('year'))
+    if want_year:    # same title, other year = another film (e.g. an older "A fenevad"): drop it
+        groups = [g for g in groups if not g.get('year') or abs(int(g['year']) - int(want_year)) <= 1]
     matches = [group for group in groups if normalize_title(group.get('title', '')) == wanted]
     if not matches and not cancelled and wanted:
         stopwords = {'a', 'az', 'the', 'and', 'of', 'at', 'to', 'in', 'on', 'for'}
@@ -334,8 +338,31 @@ def add_adapter_hosts(title, path):
     return render_host_rows(title, sources, cancelled, errors)
 
 
+def resolver_supports(source):
+    """False only for a row whose embed link is known and resolveurl has no resolver for it.
+    Rows that still need an embed lookup (parent_resolve_only), direct streams and raw players are kept."""
+    url = source.get('source_url') or ''
+    if (not url or source.get('parent_resolve_only') or source.get('direct_stream')
+            or source.get('allow_raw_source') or not url.startswith(('http://', 'https://'))):
+        return True
+    if resolveurl is None:
+        return True
+    try:
+        return bool(resolveurl.HostedMediaFile(url).valid_url())
+    except Exception:  # noqa: BLE001 - a resolver bug must not hide the row
+        return True
+
+
 def render_host_rows(title, sources, cancelled=False, errors=None):
     errors = errors or []
+    hidden = 0
+    try:
+        only = ADDON.getSettingBool('only_resolvable')
+    except Exception:  # noqa: BLE001
+        only = False
+    if only and resolveurl is not None:
+        kept = [src for src in sources if resolver_supports(src)]
+        hidden, sources = len(sources) - len(kept), kept
     sources = sorted(sources, key=source_quality_sort_key)
     shown = '%s [COLOR FFFFD700](%s)[/COLOR]' % (title, META['year']) if META.get('year') else title
     header = xbmcgui.ListItem(label='[COLOR FF65758B]--- %s | FILMHOSTOK ---[/COLOR]' % shown)
@@ -347,6 +374,8 @@ def render_host_rows(title, sources, cancelled=False, errors=None):
             message = 'A hostkeresést megszakítottad.'
         elif errors:
             message += ' Egyes adapterek nem válaszoltak.'
+        elif hidden:
+            message += ' (%d host kiszűrve: a ResolveURL nem támogatja)' % hidden
         item = xbmcgui.ListItem(label='[COLOR FF9AA6B2]%s[/COLOR]' % message)
         item.setProperty('IsPlayable', 'false')
         xbmcplugin.addDirectoryItem(HANDLE, plugin_url('noop'), item, False)
@@ -412,6 +441,7 @@ def play_sources(token, start_index):
     progress.create('Forrás ellenőrzése - %s' % title, 'Lejátszható host keresése indul...')
     remaining = len(sources) - start_index
     cancelled = False
+    dead_hosts = set()      # domains that already timed out in this attempt: no point retrying each row
     try:
         for offset, index in enumerate(range(start_index, len(sources))):
             if progress.iscanceled():
@@ -421,6 +451,10 @@ def play_sources(token, start_index):
             host = str(source.get('host', 'ismeretlen host'))
             adapter_name = str(source.get('adapter_name', 'forrás'))
             source_url = source.get('source_url', '')
+            row_domain = urlparse(source_url).netloc.lower() if source_url else ''
+            if row_domain and row_domain in dead_hosts:
+                xbmc.log('%s skipping row %d (%s / %s): %s did not answer earlier' % (ADDON_ID, index + 1, adapter_name, host, row_domain), xbmc.LOGINFO)
+                continue
             percent = int(offset * 100 / max(1, remaining))
             progress.update(
                 percent,
@@ -437,7 +471,7 @@ def play_sources(token, start_index):
                 source_resolver = getattr(adapter, 'resolve_source_url', None) if adapter else None
                 if source_resolver:
                     try:
-                        source_url = source_resolver(source) or ''
+                        source_url = run_limited(lambda: source_resolver(source), progress) or ''
                     except Exception as exc:
                         error_text = str(exc)
                         xbmc.log('%s embed extraction failed at row %d (%s / %s): %s' % (ADDON_ID, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
@@ -483,22 +517,30 @@ def play_sources(token, start_index):
             elif source_url and (zidervisionurlresolver or resolveurl):
                 if zidervisionurlresolver:
                     try:
-                        stream = resolved_stream_url(zidervisionurlresolver.resolve(source_url))
+                        stream = resolved_stream_url(run_limited(lambda: zidervisionurlresolver.resolve(source_url), progress))
                     except Exception as exc:
                         xbmc.log('%s ZiderVision resolver failed at row %d (%s / %s): %s' % (ADDON_ID, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
+                        if is_network_failure(exc):
+                            dead_hosts.add(row_domain)
                 if not stream and resolveurl:
                     try:
                         media = resolveurl.HostedMediaFile(source_url)
-                        stream = resolved_stream_url(media.resolve()) if media and media.valid_url() else ''
+                        stream = resolved_stream_url(run_limited(media.resolve, progress)) if media and media.valid_url() else ''
                     except Exception as exc:
                         xbmc.log('%s ResolveURL failed at row %d (%s / %s): %s' % (ADDON_ID, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
+                        if is_network_failure(exc):
+                            dead_hosts.add(row_domain)
                         stream = ''
             elif source_url and source.get('allow_raw_source') and source_url.startswith(('http://', 'https://')):
                 # FilmDepo's supplied addon also passes the player URL through unchanged
                 # when ResolveURL is not installed; availability checking still guards it.
                 stream = source_url
             if stream:
-                if stream_is_available(stream):
+                try:
+                    available = run_limited(lambda: stream_is_available(stream), progress, 12)
+                except Exception:  # noqa: BLE001 - timeout / cancel: treat as unavailable
+                    available = False
+                if available:
                     xbmc.log('%s resolved row %d (%s / %s)' % (ADDON_ID, index + 1, adapter_name, host), xbmc.LOGINFO)
                     progress.update(100, '[COLOR FF55C7C2]Forrás használható - lejátszás indítása:[/COLOR] [COLOR FFD9B15F]%s[/COLOR]' % host)
                     item = xbmcgui.ListItem(label=title, path=stream)
@@ -510,6 +552,10 @@ def play_sources(token, start_index):
             if source_url:
                 xbmc.log('%s direct source unavailable at row %d (%s / %s); continuing' % (ADDON_ID, index + 1, adapter_name, host), xbmc.LOGINFO)
                 if source.get('parent_resolve_only') and (source.get('direct_stream') or source.get('allow_raw_source') or zidervisionurlresolver or resolveurl):
+                    continue
+                if zidervisionurlresolver or resolveurl:
+                    # the other add-on would run the very same resolver on the very same link
+                    # (and wait for the same timeout again): move on instead
                     continue
 
             # Preserve row identity: delegate only to this row's own player route.
@@ -533,6 +579,44 @@ def play_sources(token, start_index):
             xbmcplugin.setResolvedUrl(HANDLE, False, xbmcgui.ListItem())
     finally:
         progress.close()
+
+
+RESOLVE_TIMEOUT = 25   # seconds a single host may block (embed fetch / resolver) before the next row is tried
+
+
+class RowCancelled(Exception):
+    pass
+
+
+def run_limited(func, progress=None, timeout=RESOLVE_TIMEOUT):
+    """Run a blocking call in a worker thread so Kodi's UI stays alive: the dialog's Cancel works
+    and a host that hangs is dropped after `timeout` seconds instead of freezing Kodi."""
+    box = {}
+
+    def target():
+        try:
+            box['value'] = func()
+        except BaseException as exc:  # noqa: BLE001 - re-raised in the caller
+            box['error'] = exc
+    worker = threading.Thread(target=target, daemon=True)
+    worker.start()
+    deadline = time.time() + timeout
+    while worker.is_alive():
+        if progress is not None and progress.iscanceled():
+            raise RowCancelled()
+        if time.time() > deadline:
+            raise TimeoutError('no answer in %d s' % timeout)
+        worker.join(0.2)
+    if 'error' in box:
+        raise box['error']
+    return box.get('value')
+
+
+
+def is_network_failure(exc):
+    text = ('%s %s' % (type(exc).__name__, exc)).lower()
+    return isinstance(exc, (TimeoutError, URLError, OSError)) or any(
+        marker in text for marker in ('timed out', 'timeout', 'urlerror', 'connection', 'unreachable'))
 
 
 def stream_is_available(url):

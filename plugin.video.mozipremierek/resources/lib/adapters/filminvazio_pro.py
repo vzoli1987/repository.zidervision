@@ -4,6 +4,7 @@ from __future__ import absolute_import
 
 import json
 import re
+import concurrent.futures
 from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import urlencode, urljoin, urlparse
@@ -128,8 +129,20 @@ class FilminvazioProAdapter(Adapter):
             table_html, _ = get(mirror_url, headers={'Referer': BASE})
             table = Rows()
             table.feed(table_html)
+            # Mirror rows are independent HTTP requests. Resolve a small bounded
+            # batch concurrently instead of waiting on every host serially.
+            with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=max(1, min(3, len(table.rows)))) as executor:
+                futures = {executor.submit(self._final_url, row['url']): row for row in table.rows}
+                resolved = {}
+                for future in concurrent.futures.as_completed(futures):
+                    row = futures[future]
+                    try:
+                        resolved[row['url']] = future.result()
+                    except SourceUnavailable:
+                        resolved[row['url']] = ''
             for row in table.rows:
-                target = self._final_url(row['url'])
+                target = resolved.get(row['url'], '')
                 if not target or target in seen:
                     continue
                 seen.add(target)

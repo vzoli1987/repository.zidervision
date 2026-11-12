@@ -178,8 +178,14 @@ def load_metas(urls):
         except Exception as exc:  # noqa: BLE001 - one bad page must not break the list
             log('meta error %s: %s' % (url, exc), xbmc.LOGWARNING)
             return url, {}
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        return dict(pool.map(one, urls[:40]))
+    try:
+        limit = int(ADDON.getSettingInt('meta_limit'))
+    except (TypeError, ValueError):
+        limit = 10
+    if limit <= 0:
+        return {}
+    with ThreadPoolExecutor(max_workers=8) as pool:   # the rest of the list keeps the card's own data
+        return dict(pool.map(one, urls[:limit]))
 
 
 def end_dir(content='movies', cache=True):
@@ -428,13 +434,20 @@ def search():
     xbmc.executebuiltin('Container.Update(%s)' % build_url(action='results', q=query))
 
 
-def results(query, url=None):
+SEARCH_PAGE = 20    # hits per screen: only these get detail fetches, the rest waits for "next"
+
+
+def results(query, url=None, page=1):
+    page = max(int(page or 1), 1)
     scraper = make_scraper()
     if url:
         items, next_url = scraper.list_page(url, exclude_sidebar=True)
     else:
         items, next_url = scraper.search(query)
-    persons = [] if url else list(getattr(scraper, 'last_search_people', []) or [])
+    persons = [] if (url or page > 1) else list(getattr(scraper, 'last_search_people', []) or [])
+    total = len(items)
+    if not url:     # the site sends every hit at once: show them in slices
+        items = items[(page - 1) * SEARCH_PAGE:page * SEARCH_PAGE]
     if not items and not persons:
         notify(tr(30009))
     for p in persons:       # matching celebrities first
@@ -445,10 +458,12 @@ def results(query, url=None):
             item.setArt({'thumb': p['thumb'], 'poster': p['thumb'], 'icon': p['thumb']})
         xbmcplugin.addDirectoryItem(HANDLE, build_url(action='person', url=p['url'], name=p['name']), item, True)
     show_items(items, 'film')
-    if next_url and next_url != url:
-        add_folder('[B]%s >>[/B]' % tr(30002),
-                   build_url(action='results', q=query, url=next_url))
-    end_dir()
+    if not url and page * SEARCH_PAGE < total:
+        add_folder('[B]%s >> (%d/%d)[/B]' % (tr(30002), page * SEARCH_PAGE, total),
+                   build_url(action='results', q=query, page=page + 1))
+    elif next_url and next_url != url:
+        add_folder('[B]%s >>[/B]' % tr(30002), build_url(action='results', q=query, url=next_url))
+    end_dir(cache=False)
 
 
 def play_yt(video_id):
@@ -511,7 +526,7 @@ def router(paramstring):
     elif action == 'search':
         search()
     elif action == 'results':
-        results(params.get('q', ''), params.get('url'))
+        results(params.get('q', ''), params.get('url'), params.get('page', 1))
     elif action == 'yt':
         play_yt(params['id'])
     elif action == 'play':

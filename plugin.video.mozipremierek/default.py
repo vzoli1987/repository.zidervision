@@ -46,6 +46,30 @@ PLUGIN_BASE = sys.argv[0]
 HOST_CACHE_SCHEMA = 5
 
 
+def highest_srcset_url(srcset):
+    """Choose the largest candidate from a standard image srcset attribute."""
+    candidates = []
+    for order, candidate in enumerate((srcset or '').split(',')):
+        parts = candidate.strip().split()
+        if not parts:
+            continue
+        descriptor = parts[1].lower() if len(parts) > 1 else ''
+        score = 0.0
+        try:
+            if descriptor.endswith('w'):
+                score = float(descriptor[:-1])
+            elif descriptor.endswith('x'):
+                # Width and density descriptors are not mixed in valid srcsets.
+                # A scale factor is ranked above an unqualified URL.
+                score = 100000.0 + float(descriptor[:-1])
+        except ValueError:
+            score = 0.0
+        candidates.append((score, order, parts[0]))
+    if not candidates:
+        return ''
+    return max(candidates)[2]
+
+
 class SiteParser(HTMLParser):
     """Extract catalog cards, genres, synopsis and YouTube trailer references."""
     def __init__(self):
@@ -154,8 +178,9 @@ class SiteParser(HTMLParser):
         elif self.anchor is not None and tag == 'img':
             src = attrs.get('src', '')
             srcset = attrs.get('srcset', '')
-            if not src and srcset:
-                src = srcset.split(',')[0].strip().split(' ')[0]
+            best_srcset = highest_srcset_url(srcset)
+            if best_srcset:
+                src = best_srcset
             if src and not self.anchor['image']:
                 self.anchor['image'] = src
             if 'Jelenetkép' in attrs.get('alt', '') and not self.fanart:
@@ -289,7 +314,7 @@ def fetch_page(path):
     # Kodi's Python HTTP client needs percent-encoded non-ASCII genre slugs.
     url = quote(url, safe=":/?&=%#[]@!$'()*+,;")
     request = Request(url, headers={
-        'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.7.5) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.7.8) AppleWebKit/537.36',
         'Accept': 'text/html,application/xhtml+xml'
     })
     try:
@@ -409,10 +434,17 @@ def enrich_movies(entries):
     if missing:
         # A small worker pool keeps the first Fanart view useful without flooding the site.
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-            futures = {executor.submit(fetch_movie_metadata, path): path for path in missing}
-            for future, path in ((future, futures[future]) for future in futures):
+            futures = {}
+            for path in missing:
+                futures[executor.submit(fetch_movie_metadata, path)] = (path, time.monotonic())
+            for future in concurrent.futures.as_completed(futures):
+                path, started_at = futures[future]
                 try:
                     cache[path] = future.result()
+                    xbmc.log(
+                        '%s PERF metadata_page elapsed=%.2fs' %
+                        (ADDON_ID, time.monotonic() - started_at), xbmc.LOGINFO
+                    )
                 except Exception as exc:
                     xbmc.log('%s metadata unavailable for %s: %s' % (ADDON_ID, path, exc), xbmc.LOGWARNING)
         write_metadata_cache(cache)
@@ -613,7 +645,9 @@ def show_list(path, provider='', page=1):
         raise RuntimeError('Érvénytelen katalógusútvonal.')
     if provider:
         path += ('&' if '?' in path else '?') + 'provider=' + provider
+    started_at = time.monotonic()
     parser = parse_page(path)
+    xbmc.log('%s PERF catalog_page elapsed=%.2fs' % (ADDON_ID, time.monotonic() - started_at), xbmc.LOGINFO)
     seen = set()
     entries = []
     for entry in parser.movies:
@@ -629,7 +663,12 @@ def show_list(path, provider='', page=1):
         page = max(1, int(page))
     except (TypeError, ValueError):
         page = 1
-    page_size = 8
+    # Detailed Fanart metadata requires one extra movie-page request per item.
+    # Keep Android directory openings lighter; desktop keeps the larger page.
+    try:
+        page_size = 4 if xbmc.getCondVisibility('System.Platform.Android') else 8
+    except Exception:
+        page_size = 8
     pages = (len(entries) + page_size - 1) // page_size
     start = (page - 1) * page_size
     page_entries = entries[start:start + page_size]
@@ -657,7 +696,9 @@ def show_latest():
 def show_movie(path):
     if not path.startswith('/movie/'):
         raise RuntimeError('Érvénytelen film-adatlap.')
+    started_at = time.monotonic()
     parser = parse_page(path)
+    xbmc.log('%s PERF movie_detail elapsed=%.2fs' % (ADDON_ID, time.monotonic() - started_at), xbmc.LOGINFO)
     title = parser.page_title or path.rstrip('/').split('/')[-1].replace('-', ' ').title()
     xbmcplugin.setPluginCategory(HANDLE, title)
     seen = set()
@@ -739,13 +780,13 @@ def update_source_progress(progress, percent, page_name, completed, total, count
         page_name, max(0, int(completed)), max(1, int(total))
     )
     line3 = (
-        '[COLOR FFBCA8E8]4K %d[/COLOR] | '
-        '[COLOR FF72D5C9]1080p %d[/COLOR] | '
-        '[COLOR FF77B5FF]720p %d[/COLOR] | '
-        '[COLOR FF66CC88]HD %d[/COLOR] | '
-        '[COLOR FFA7B0BA]SD %d[/COLOR] | '
-        '[COLOR FFFFB86C]DVD %d[/COLOR] | '
-        '[COLOR FFFF7777]CAM %d[/COLOR]  '
+        '[COLOR FFBCA8E8]4K[/COLOR] [COLOR FFFF9E64]%d[/COLOR] | '
+        '[COLOR FF72D5C9]1080p[/COLOR] [COLOR FFFF9E64]%d[/COLOR] | '
+        '[COLOR FF77B5FF]720p[/COLOR] [COLOR FFFF9E64]%d[/COLOR] | '
+        '[COLOR FF66CC88]HD[/COLOR] [COLOR FFFF9E64]%d[/COLOR] | '
+        '[COLOR FFA7B0BA]SD[/COLOR] [COLOR FFFF9E64]%d[/COLOR] | '
+        '[COLOR FFFFB86C]DVD[/COLOR] [COLOR FFFF9E64]%d[/COLOR] | '
+        '[COLOR FFFF7777]CAM[/COLOR] [COLOR FFFF9E64]%d[/COLOR]  '
         '[COLOR FFE6ECF2]Össz: [COLOR FFFF9E64]%d[/COLOR][/COLOR]'
     ) % (
         counts['4K'], counts['1080p'], counts['720p'], counts['HD'],
@@ -822,23 +863,38 @@ def add_adapter_hosts(title, path):
     cancelled = False
     total_adapters = len(ADAPTERS)
     try:
-        for index, adapter in enumerate(ADAPTERS):
-            if progress.iscanceled():
-                cancelled = True
-                break
-            update_source_progress(
-                progress, int(25 * index / max(1, total_adapters)),
-                adapter.name, index, total_adapters, counts, 'FORRÁSKERESÉS'
-            )
-            try:
-                records.extend(adapter.search(title) or [])
-            except Exception as exc:
-                errors.append('%s: %s' % (adapter.name, exc))
-                xbmc.log('%s adapter search failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
-            update_source_progress(
-                progress, int(25 * (index + 1) / max(1, total_adapters)),
-                adapter.name, index + 1, total_adapters, counts, 'FORRÁSKERESÉS'
-            )
+        # Adapter searches are network-I/O bound. Run a small bounded pool and
+        # consume completions on this Kodi/plugin thread so progress UI stays safe.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(4, total_adapters))) as executor:
+            futures = {}
+            for adapter in ADAPTERS:
+                started_at = time.monotonic()
+                futures[executor.submit(adapter.search, title)] = (adapter, started_at)
+            completed = 0
+            for future in concurrent.futures.as_completed(futures):
+                adapter, started_at = futures[future]
+                if progress.iscanceled():
+                    cancelled = True
+                    for pending in futures:
+                        if not pending.done():
+                            pending.cancel()
+                    break
+                try:
+                    found = future.result() or []
+                    records.extend(found)
+                    xbmc.log(
+                        '%s PERF adapter_search adapter=%s elapsed=%.2fs results=%d' %
+                        (ADDON_ID, adapter.adapter_id, time.monotonic() - started_at, len(found)),
+                        xbmc.LOGINFO
+                    )
+                except Exception as exc:
+                    errors.append('%s: %s' % (adapter.name, exc))
+                    xbmc.log('%s adapter search failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
+                completed += 1
+                update_source_progress(
+                    progress, int(25 * completed / max(1, total_adapters)),
+                    adapter.name, completed, total_adapters, counts, 'FORRÁSKERESÉS'
+                )
     except Exception as exc:
         errors.append('Adapter keresés: %s' % exc)
         xbmc.log('%s progress/search error: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
@@ -880,36 +936,48 @@ def add_adapter_hosts(title, path):
         tasks = [(movie, adapter) for movie, adapter in tasks if adapter]
         seen = set()
         try:
-            for index, (movie, adapter) in enumerate(tasks):
-                if progress.iscanceled():
-                    cancelled = True
-                    break
-                update_source_progress(
-                    progress, 25 + int(75 * index / max(1, len(tasks))), adapter.name,
-                    index, len(tasks), counts, 'HOSTOK KIOLVASÁSA'
-                )
-                try:
-                    found = adapter.sources(movie) or []
-                    accepted = []
-                    for source in found:
-                        source['adapter_name'] = source.get('adapter_name') or adapter.name
-                        key = (
-                            source['adapter_name'], str(source.get('host', '')).casefold(),
-                            str(source.get('quality', '')).casefold(), str(source.get('language', '')).casefold(),
-                            str(source.get('source_url') or source.get('source_page_url') or source.get('play_url', '')).casefold()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(3, len(tasks)))) as executor:
+                futures = {
+                    executor.submit(adapter.sources, movie): (movie, adapter, time.monotonic())
+                    for movie, adapter in tasks
+                }
+                completed = 0
+                for future in concurrent.futures.as_completed(futures):
+                    movie, adapter, started_at = futures[future]
+                    if progress.iscanceled():
+                        cancelled = True
+                        for pending in futures:
+                            if not pending.done():
+                                pending.cancel()
+                        break
+                    try:
+                        found = future.result() or []
+                        xbmc.log(
+                            '%s PERF source_list adapter=%s elapsed=%.2fs rows=%d' %
+                            (ADDON_ID, adapter.adapter_id, time.monotonic() - started_at, len(found)),
+                            xbmc.LOGINFO
                         )
-                        if key not in seen:
-                            seen.add(key)
-                            sources.append(source)
-                            accepted.append(source)
-                    add_quality_counts(counts, accepted)
-                except Exception as exc:
-                    errors.append('%s: %s' % (adapter.name, exc))
-                    xbmc.log('%s source listing failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
-                update_source_progress(
-                    progress, 25 + int(75 * (index + 1) / max(1, len(tasks))), adapter.name,
-                    index + 1, len(tasks), counts, 'HOSTOK KIOLVASÁSA'
-                )
+                        accepted = []
+                        for source in found:
+                            source['adapter_name'] = source.get('adapter_name') or adapter.name
+                            key = (
+                                source['adapter_name'], str(source.get('host', '')).casefold(),
+                                str(source.get('quality', '')).casefold(), str(source.get('language', '')).casefold(),
+                                str(source.get('source_url') or source.get('source_page_url') or source.get('play_url', '')).casefold()
+                            )
+                            if key not in seen:
+                                seen.add(key)
+                                sources.append(source)
+                                accepted.append(source)
+                        add_quality_counts(counts, accepted)
+                    except Exception as exc:
+                        errors.append('%s: %s' % (adapter.name, exc))
+                        xbmc.log('%s source listing failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
+                    completed += 1
+                    update_source_progress(
+                        progress, 25 + int(75 * completed / max(1, len(tasks))), adapter.name,
+                        completed, len(tasks), counts, 'HOSTOK KIOLVASÁSA'
+                    )
         except Exception as exc:
             errors.append('Forráslista: %s' % exc)
             xbmc.log('%s progress/source error: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
@@ -1114,7 +1182,7 @@ def play_sources(token, start_index):
 def stream_is_available(url):
     """Lightweight availability check so a dead resolved link is skipped before playback."""
     target = url
-    headers = {'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.7.5)', 'Range': 'bytes=0-0'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.7.8)', 'Range': 'bytes=0-0'}
     if '|' in url:
         target, raw_headers = url.split('|', 1)
         for key, values in parse_qs(raw_headers, keep_blank_values=True).items():
