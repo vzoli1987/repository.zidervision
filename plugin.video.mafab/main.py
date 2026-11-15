@@ -195,6 +195,26 @@ def end_dir(content='movies', cache=True):
 
 
 # ------------------------------------------------------------------ routes --
+def clear_cache():
+    """Delete cached pages, details, host lists and search data (never settings.xml)."""
+    import glob
+    import os
+    profile = xbmcvfs.translatePath(ADDON.getAddonInfo('profile'))
+    removed = 0
+    paths = glob.glob(os.path.join(profile, 'cache', '*'))
+    for pattern in ('host_cache_*.json', 'source_queue_*.json', 'search_*.json', 'host_support.json'):
+        paths += glob.glob(os.path.join(profile, pattern))
+    for path in paths:
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+                removed += 1
+        except OSError as exc:
+            log('cache delete failed %s: %s' % (path, exc), xbmc.LOGWARNING)
+    notify(tr(30107) % removed)
+    xbmc.executebuiltin('Container.Refresh')
+
+
 def root():
     scraper = make_scraper()
     add_folder(tr(30000), build_url(action='home'))
@@ -208,6 +228,8 @@ def root():
     add_folder(tr(30011), build_url(action='providers'))
     add_folder(tr(30010), build_url(action='tv_days'))
     add_folder(tr(30001), build_url(action='search'))
+    add_folder(tr(30119), build_url(action='filter'))
+    add_folder(tr(30106), build_url(action='clear_cache'))
     end_dir('files')
 
 
@@ -429,6 +451,81 @@ def person(url, name=''):
     end_dir('movies', cache=False)
 
 
+def filter_search():
+    """Mafab's advanced filters, picked step by step in a menu; "Keresés" opens the result list."""
+    from resources.lib import filters
+    dialog = xbmcgui.Dialog()
+    state = filters.new_state()
+
+    def names(pairs, chosen):
+        return ', '.join(label for key, label in pairs if key in chosen) or tr(30114)
+
+    def label_of(pairs, key):
+        return next((label for k, label in pairs if k == key), tr(30114))
+
+    while True:
+        kinds = (tr(30120) if state['movies'] and state['series'] else tr(30121) if state['movies'] else tr(30122))
+        rows = [
+            '%s: %s' % (tr(30108), kinds),
+            '%s: %s' % (tr(30109), names(filters.GENRES, state['genres'])),
+            '%s: %s' % (tr(30110), label_of(filters.RATINGS, state['rating'])),
+            '%s: %s' % (tr(30111), label_of(filters.AGES, state['age'])),
+            '%s: %s' % (tr(30112), state['year_from'] or tr(30114)),
+            '%s: %s' % (tr(30113), state['year_to'] or tr(30114)),
+            '%s: %s' % (tr(30115), state['country'][1] if state['country'] else tr(30114)),
+            '%s: %s' % (tr(30116), names(filters.PLATFORMS, state['platforms'])),
+            '%s: %s' % (tr(30117), state['keyword'] or tr(30114)),
+            '[B]%s[/B]' % tr(30118),
+        ]
+        pick = dialog.select(tr(30119), rows)
+        if pick < 0:
+            return
+        if pick == 0:
+            choice = dialog.select(tr(30108), [tr(30120), tr(30121), tr(30122)])
+            if choice >= 0:
+                state['movies'], state['series'] = (choice in (0, 1)), (choice in (0, 2))
+        elif pick == 1:
+            chosen = dialog.multiselect(tr(30109), [l for _, l in filters.GENRES],
+                                        preselect=[i for i, (k, _) in enumerate(filters.GENRES) if k in state['genres']])
+            if chosen is not None:
+                state['genres'] = [filters.GENRES[i][0] for i in chosen]
+        elif pick in (2, 3):
+            key, pairs = ('rating', filters.RATINGS) if pick == 2 else ('age', filters.AGES)
+            choice = dialog.select(tr(30110 if pick == 2 else 30111), [l for _, l in pairs])
+            if choice >= 0:
+                state[key] = pairs[choice][0]
+        elif pick in (4, 5):
+            key = 'year_from' if pick == 4 else 'year_to'
+            value = dialog.numeric(0, tr(30112 if pick == 4 else 30113), str(state[key] or ''))
+            if value is not None and str(value).strip().isdigit():
+                state[key] = int(value) if 1900 <= int(value) <= 2029 else 0
+        elif pick == 6:
+            labels = [tr(30114)] + [l for _, l in filters.COUNTRIES]
+            choice = dialog.select(tr(30115), labels)
+            if choice >= 0:
+                state['country'] = filters.COUNTRIES[choice - 1] if choice else None
+        elif pick == 7:
+            chosen = dialog.multiselect(tr(30116), [l for _, l in filters.PLATFORMS],
+                                        preselect=[i for i, (k, _) in enumerate(filters.PLATFORMS) if k in state['platforms']])
+            if chosen is not None:
+                state['platforms'] = [filters.PLATFORMS[i][0] for i in chosen]
+        elif pick == 8:
+            state['keyword'] = dialog.input(tr(30117), state['keyword'], type=xbmcgui.INPUT_ALPHANUM) or ''
+        elif pick == 9:
+            try:
+                with timed('filter request'):
+                    url, count = filters.results_url(state)
+            except Exception as exc:  # noqa: BLE001
+                log('filter search failed: %s' % exc, xbmc.LOGWARNING)
+                notify(tr(30008), xbmcgui.NOTIFICATION_WARNING)
+                continue
+            if count == 0:
+                notify(tr(30009))
+                continue
+            xbmc.executebuiltin('Container.Update(%s)' % build_url(action='list', url=url, kind='film'))
+            return
+
+
 def search():
     query = xbmcgui.Dialog().input(tr(30003), type=xbmcgui.INPUT_ALPHANUM)
     if not query:
@@ -517,6 +614,10 @@ def _route(params, action):
     elif action == 'play_sources':
         from resources.lib import hosts
         hosts.play_sources(params.get('token', ''), params.get('index', '0'))
+    elif action == 'filter':
+        filter_search()
+    elif action == 'clear_cache':
+        clear_cache()
     elif action == 'noop':
         pass
     elif action == 'people_menu':
