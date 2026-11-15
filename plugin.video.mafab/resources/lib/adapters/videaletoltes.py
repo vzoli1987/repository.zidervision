@@ -10,7 +10,7 @@ from urllib.parse import quote_plus, urlencode, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
-from .base import Adapter, detect_quality
+from .base import Adapter, detect_quality, normalize_mirror
 from .filminvazio_pro import FilminvazioProAdapter, Media, Rows, MIRROR
 from ..net import SourceUnavailable, get, get_json
 
@@ -30,10 +30,34 @@ class VidealetoltesAdapter(FilminvazioProAdapter):
         return {'title': title, 'year': str(year or ''), 'url': url, 'poster': poster, 'plot': '',
                 'adapter_id': self.adapter_id, 'adapter_name': self.name, 'quality': quality}
 
+    def _search_articles(self, soup, final):
+        """DooPlay result list: <article> with a poster link and <div class="title"><a>."""
+        out, seen = [], set()
+        for art in soup.find_all('article'):
+            link = art.select_one('.title a[href]') or art.select_one('.details a[href]')
+            if link is None:
+                continue
+            url = urljoin(final, link['href'].split('#')[0])
+            if not MOVIE_PATH.match(urlparse(url).path) or url in seen:
+                continue
+            title = ' '.join(link.get_text(' ', strip=True).split())
+            if not title:
+                continue
+            seen.add(url)
+            img = art.find('img')
+            src = (img.get('data-src') or img.get('data-lazy-src') or img.get('src') or '') if img is not None else ''
+            meta = art.select_one('.meta')
+            year = re.search(r'\b(?:19|20)\d{2}\b', meta.get_text(' ', strip=True) if meta else '')
+            out.append(self._record(title, url, year.group(0) if year else '',
+                                    '' if (not src or 'no_image' in src) else urljoin(final, src), detect_quality(art)))
+        return out
+
     def _search_html(self, query):
         body, final = get('%s?s=%s' % (MIRROR, quote_plus(query)), headers={'Referer': MIRROR})
         soup = BeautifulSoup(body, 'html.parser')
-        out, seen = [], set()
+        out, seen = self._search_articles(soup, final), set()
+        if out:
+            return out
         for link in soup.find_all('a', href=True):
             url = urljoin(final, link['href'].split('#')[0])
             parsed = urlparse(url)
@@ -112,6 +136,36 @@ class VidealetoltesAdapter(FilminvazioProAdapter):
                 return found
         return []
 
+    def _final_url_for(self, url, expected_host=''):
+        """/links/<code>/ shows a countdown and then `<a id="link" href=...>`; other anchors are ads."""
+        try:
+            body, final = get(url, headers={'Referer': MIRROR})
+        except SourceUnavailable:
+            return ''
+        mirror_hosts = ('videaletoltes.com',)
+
+        def outside(href):
+            target = urljoin(final, unescape(href))
+            host = urlparse(target).netloc.lower().replace('www.', '')
+            return target if host and host not in mirror_hosts and not host.endswith('.videaletoltes.com') else ''
+        for tag in re.findall(r'<a\b[^>]*>', body, re.I):
+            if re.search(r'\bid=["\']link["\']', tag, re.I):
+                href = re.search(r'href=["\']([^"\']+)', tag, re.I)
+                if href and outside(href.group(1)):
+                    return normalize_mirror(outside(href.group(1)))[0]
+        expected = (expected_host or '').lower().replace('www.', '').strip()
+        hrefs = re.findall(r'<a\b[^>]*href=["\']([^"\']+)', body, re.I)
+        if re.fullmatch(r'[a-z0-9.-]+\.[a-z]{2,}', expected or ''):
+            for href in hrefs:
+                target = outside(href)
+                host = urlparse(target).netloc.lower().replace('www.', '') if target else ''
+                if host == expected or host.endswith('.' + expected):
+                    return normalize_mirror(target)[0]
+        for href in hrefs:
+            if outside(href):
+                return normalize_mirror(outside(href))[0]
+        return ''
+
     def sources(self, movie):
         body, final = get(movie['url'], headers={'Referer': MIRROR})
         out, seen = [], set()
@@ -122,7 +176,7 @@ class VidealetoltesAdapter(FilminvazioProAdapter):
         quality_default = movie.get('quality', '')
         raw = [(row['url'], row) for row in table.rows] + [(url, None) for url in media.urls]
         with ThreadPoolExecutor(max_workers=8) as pool:
-            finals = list(pool.map(lambda pair: self._final_url(pair[0]), raw))
+            finals = list(pool.map(lambda pair: self._final_url_for(pair[0], pair[1]['host'] if pair[1] else ''), raw))
         for (_, row), target in zip(raw, finals):
             if not target or target in seen or 'youtube.com' in urlparse(target).netloc.lower():
                 continue
@@ -130,7 +184,7 @@ class VidealetoltesAdapter(FilminvazioProAdapter):
             host = urlparse(target).netloc.lower()
             host = host[4:] if host.startswith('www.') else host
             out.append({
-                'host': (row['host'] if row else '') or host,
+                'host': host if (urlparse(target).netloc == 'voe.sx' or not row) else (row['host'] or host),
                 'quality': (row['quality'] if row else '') or quality_default,
                 'language': row['language'] if row else '', 'source_url': target,
                 'play_url': self._play_url(target), 'adapter_name': self.name,

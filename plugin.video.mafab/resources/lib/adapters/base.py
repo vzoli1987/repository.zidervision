@@ -41,3 +41,20 @@ def detect_quality(node):
             return '720p'
         return 'HD'
     return ''
+
+
+_VOE_BARE_ID = _re.compile(r'^/([a-z0-9]{12})/?$')
+_NOT_VOE = ('streamtape', 'doodstream', 'dood.', 'filemoon', 'mixdrop', 'upstream', 'vidmoly', 'vinovo', 'vidara',
+            'indavideo', 'videa.hu', 'ok.ru', 'youtube', 'youtu.be')
+
+
+def normalize_mirror(url):
+    """VOE keeps rotating its domains (susanexpectcare.com, arianathankspecial.com ...) and ResolveURL cannot
+    know them all. The same 12-character id always works on voe.sx: return (url, True) after that rewrite."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url or '')
+    host = parsed.netloc.lower()
+    match = _VOE_BARE_ID.match(parsed.path or '')
+    if not match or not host or host.endswith('voe.sx') or any(token in host for token in _NOT_VOE):
+        return url, False
+    return 'https://voe.sx/e/%s' % match.group(1), True

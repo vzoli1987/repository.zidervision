@@ -78,3 +78,71 @@ msgstr ""
 msgctxt "#30105"
 msgid "List only hosts supported by ResolveURL"
 msgstr ""
+
+msgctxt "#30106"
+msgid "Clear cache"
+msgstr ""
+
+msgctxt "#30107"
+msgid "%d cache files deleted"
+msgstr ""
+
+msgctxt "#30108"
+msgid "Type"
+msgstr ""
+
+msgctxt "#30109"
+msgid "Genre"
+msgstr ""
+
+msgctxt "#30110"
+msgid "Rating"
+msgstr ""
+
+msgctxt "#30111"
+msgid "Age limit"
+msgstr ""
+
+msgctxt "#30112"
+msgid "Year from"
+msgstr ""
+
+msgctxt "#30113"
+msgid "Year to"
+msgstr ""
+
+msgctxt "#30114"
+msgid "any"
+msgstr ""
+
+msgctxt "#30115"
+msgid "Country"
+msgstr ""
+
+msgctxt "#30116"
+msgid "Platform"
+msgstr ""
+
+msgctxt "#30117"
+msgid "Keyword"
+msgstr ""
+
+msgctxt "#30118"
+msgid ">> Search"
+msgstr ""
+
+msgctxt "#30119"
+msgid "Filter search"
+msgstr ""
+
+msgctxt "#30120"
+msgid "Movies and series"
+msgstr ""
+
+msgctxt "#30121"
+msgid "Movies only"
+msgstr ""
+
+msgctxt "#30122"
+msgid "Series only"
+msgstr ""

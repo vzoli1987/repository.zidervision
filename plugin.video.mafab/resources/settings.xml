@@ -37,6 +37,11 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <setting id="clear_cache" type="action" label="30106">
+          <level>0</level>
+          <data>RunPlugin(plugin://plugin.video.mafab/?action=clear_cache)</data>
+          <control type="button" format="action"/>
+        </setting>
         <setting id="debug" type="boolean" label="30102">
           <level>0</level>
           <default>false</default>

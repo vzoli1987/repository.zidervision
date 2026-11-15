@@ -78,3 +78,71 @@ msgstr "Részletes adatok száma oldalanként (a többi csak a lista adatait mut
 msgctxt "#30105"
 msgid "List only hosts supported by ResolveURL"
 msgstr "Csak a ResolveURL által támogatott hostok listázása"
+
+msgctxt "#30106"
+msgid "Clear cache"
+msgstr "Gyorsítótár törlése"
+
+msgctxt "#30107"
+msgid "%d cache files deleted"
+msgstr "%d gyorsítótár-fájl törölve"
+
+msgctxt "#30108"
+msgid "Type"
+msgstr "Típus"
+
+msgctxt "#30109"
+msgid "Genre"
+msgstr "Műfaj"
+
+msgctxt "#30110"
+msgid "Rating"
+msgstr "Értékelés"
+
+msgctxt "#30111"
+msgid "Age limit"
+msgstr "Korhatár"
+
+msgctxt "#30112"
+msgid "Year from"
+msgstr "Év -tól"
+
+msgctxt "#30113"
+msgid "Year to"
+msgstr "Év -ig"
+
+msgctxt "#30114"
+msgid "any"
+msgstr "mindegy"
+
+msgctxt "#30115"
+msgid "Country"
+msgstr "Ország"
+
+msgctxt "#30116"
+msgid "Platform"
+msgstr "Platform"
+
+msgctxt "#30117"
+msgid "Keyword"
+msgstr "Kulcsszó"
+
+msgctxt "#30118"
+msgid ">> Search"
+msgstr ">> Keresés"
+
+msgctxt "#30119"
+msgid "Filter search"
+msgstr "Szűrős keresés"
+
+msgctxt "#30120"
+msgid "Movies and series"
+msgstr "Filmek és sorozatok"
+
+msgctxt "#30121"
+msgid "Movies only"
+msgstr "Csak filmek"
+
+msgctxt "#30122"
+msgid "Series only"
+msgstr "Csak sorozatok"

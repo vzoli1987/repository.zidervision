@@ -9,7 +9,7 @@ from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import urlencode, urljoin, urlparse
 
-from .base import Adapter
+from .base import Adapter, normalize_mirror
 from ..net import SourceUnavailable, get, get_json, text_only
 
 BASE = 'https://filminvazio.pro/'
@@ -113,10 +113,10 @@ class FilminvazioProAdapter(Adapter):
             target = urljoin(final, unescape(href))
             host = urlparse(target).netloc.lower()
             if host and not (host == 'videaletoltes.com' or host.endswith('.videaletoltes.com')):
-                return target
+                return normalize_mirror(target)[0]
         host = urlparse(final).netloc.lower()
         if host and not (host == 'videaletoltes.com' or host.endswith('.videaletoltes.com')):
-            return final
+            return normalize_mirror(final)[0]
         return ''
 
     def sources(self, movie):
@@ -136,7 +136,7 @@ class FilminvazioProAdapter(Adapter):
                     continue
                 seen.add(target)
                 out.append({
-                    'host': row['host'], 'quality': row['quality'], 'language': row['language'],
+                    'host': 'voe.sx' if urlparse(target).netloc == 'voe.sx' else row['host'], 'quality': row['quality'], 'language': row['language'],
                     'source_url': target, 'play_url': self._play_url(target), 'adapter_name': self.name
                 })
         except SourceUnavailable:

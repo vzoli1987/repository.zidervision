@@ -352,7 +352,7 @@ def add_adapter_hosts(title, path):
         by_id = {adapter.adapter_id: adapter for adapter in ADAPTERS}
         tasks = [(movie, by_id.get(movie.get('adapter_id'))) for movie in group.get('movies', [])]
         tasks = [(movie, adapter) for movie, adapter in tasks if adapter]
-        seen = set()
+        seen = {}
 
         def sources_one(movie, adapter):
             with timed('adapter sources %s' % adapter.name):
@@ -400,9 +400,11 @@ def add_adapter_hosts(title, path):
                                 str(source.get('source_url') or source.get('source_page_url') or source.get('play_url', '')).casefold()
                             )
                         if key not in seen:
-                            seen.add(key)
+                            seen[key] = source
                             sources.append(source)
                             accepted.append(source)
+                        elif key[0] == 'embed' and source['adapter_name'] not in seen[key]['adapter_name'].split(' + '):
+                            seen[key]['adapter_name'] += ' + ' + source['adapter_name']   # same row from a mirror site: show both names
                     add_quality_counts(counts, accepted)
             finally:
                 _stop_pool(pool)
