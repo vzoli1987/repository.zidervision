@@ -1,0 +1,11 @@
+msgctxt "#32000"
+msgid "Források"
+msgstr "Források"
+
+msgctxt "#32001"
+msgid "Tiltólistás hostok"
+msgstr "Tiltólistás hostok"
+
+msgctxt "#32002"
+msgid "Vesszővel elválasztott domainek; ezek a hostok és aldomainjeik nem jelennek meg és nem indulnak el. Alapértelmezés: luluvdo.com,lulustream.com"
+msgstr "Vesszővel elválasztott domainek; ezek a hostok és aldomainjeik nem jelennek meg és nem indulnak el. Alapértelmezés: luluvdo.com,lulustream.com"

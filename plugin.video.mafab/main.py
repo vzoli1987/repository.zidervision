@@ -13,7 +13,7 @@ import xbmcvfs
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from resources.lib import hosts
+from resources.lib.perf import timed
 from resources.lib.scraper import (Scraper, ScrapeError, split_year, PROVIDERS, PROVIDER_BY_SLUG,
                                    VOD_PAGE, guess_series, clean_channel, PEOPLE_ROLES, BIRTHDAYS_PAGE)
 
@@ -184,8 +184,9 @@ def load_metas(urls):
         limit = 10
     if limit <= 0:
         return {}
-    with ThreadPoolExecutor(max_workers=8) as pool:   # the rest of the list keeps the card's own data
-        return dict(pool.map(one, urls[:limit]))
+    with timed('load_metas (%d items)' % min(limit, len(urls))):
+        with ThreadPoolExecutor(max_workers=8) as pool:   # the rest of the list keeps the card's own data
+            return dict(pool.map(one, urls[:limit]))
 
 
 def end_dir(content='movies', cache=True):
@@ -327,6 +328,7 @@ def film(url, title='', year='', prov=''):
     title = clean_title(title or info['title']) or url
     year = int(year) if str(year).isdigit() else meta.get('year')
     shown = with_year(title, year, meta.get('is_series'))
+    from resources.lib import hosts      # imported on demand: it pulls in the adapters and resolvers
     hosts.META = dict(meta, plot=plot, poster=thumb, year=year)
     for vid in info['youtube']:
         add_playable('%s - %s [YouTube %s]' % (tr(30004), shown, vid),
@@ -499,6 +501,11 @@ def play(url):
 def router(paramstring):
     params = dict(parse_qsl(paramstring))
     action = params.get('action')
+    with timed('SCREEN %s' % (action or 'root')):
+        _route(params, action)
+
+
+def _route(params, action):
     if action is None:
         root()
     elif action == 'home':
@@ -508,6 +515,7 @@ def router(paramstring):
     elif action == 'film':
         film(params['url'], params.get('title', ''), params.get('year', ''), params.get('prov', ''))
     elif action == 'play_sources':
+        from resources.lib import hosts
         hosts.play_sources(params.get('token', ''), params.get('index', '0'))
     elif action == 'noop':
         pass

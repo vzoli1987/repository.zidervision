@@ -1,0 +1,11 @@
+msgctxt "#32000"
+msgid "Sources"
+msgstr "Sources"
+
+msgctxt "#32001"
+msgid "Blocked hosts"
+msgstr "Blocked hosts"
+
+msgctxt "#32002"
+msgid "Comma-separated domains; these hosts and their subdomains will be hidden and skipped. Default: luluvdo.com,lulustream.com"
+msgstr "Comma-separated domains; these hosts and their subdomains will be hidden and skipped. Default: luluvdo.com,lulustream.com"

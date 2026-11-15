@@ -8,7 +8,9 @@ same way (ZiderVision/ResolveURL resolvers, per-row hand-off to other add-ons).
 """
 from __future__ import absolute_import
 
+import importlib
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -29,16 +31,36 @@ import xbmcvfs
 
 from .adapters import ADAPTERS
 from .aggregator import _year, group_movies, normalize_title
+from .perf import timed
 
-try:
-    import resolveurl
-except ImportError:
-    resolveurl = None
+class _LazyModule(object):
+    """Importing resolveurl takes seconds on Android: do it only when a resolver is really needed."""
 
-try:
-    import zidervisionurlresolver
-except ImportError:
-    zidervisionurlresolver = None
+    def __init__(self, name):
+        self._name = name
+        self._mod = False
+
+    def _load(self):
+        if self._mod is False:
+            try:
+                with timed('import %s' % self._name):
+                    self._mod = importlib.import_module(self._name)
+            except Exception:  # noqa: BLE001 - not installed / broken: behave as absent
+                self._mod = None
+        return self._mod
+
+    def __bool__(self):
+        return self._load() is not None
+
+    def __getattr__(self, attr):
+        module = self._load()
+        if module is None:
+            raise AttributeError(attr)
+        return getattr(module, attr)
+
+
+resolveurl = _LazyModule('resolveurl')
+zidervisionurlresolver = _LazyModule('zidervisionurlresolver')
 
 ADDON = xbmcaddon.Addon()
 ADDON_ID = ADDON.getAddonInfo('id')
@@ -83,6 +105,26 @@ def set_video_info(item, info):
         item.setInfo('video', info)
 
 
+
+
+def quality_color(quality):
+    """Same palette as the progress dialog: 4K purple, 1080p teal, 720p blue, HD green, SD grey, DVD orange, CAM red."""
+    q = str(quality or '').upper()
+    if '2160' in q or '4K' in q or 'UHD' in q:
+        return 'FFBCA8E8'
+    if '1080' in q or '1440' in q or '2K' in q:
+        return 'FF72D5C9'
+    if '720' in q:
+        return 'FF77B5FF'
+    if 'DVD' in q or 'BLU' in q or 'WEB' in q:
+        return 'FFFFB86C'
+    if 'CAM' in q or q.strip() in ('TS', 'TC', 'HDCAM', 'MOZIS'):
+        return 'FFFF7777'
+    if 'HD' in q:
+        return 'FF66CC88'
+    if '480' in q or '360' in q or 'SD' in q:
+        return 'FFA7B0BA'
+    return 'FF65758B'
 
 
 def quality_counts():
@@ -233,24 +275,41 @@ def add_adapter_hosts(title, path):
     progress.create('HOSTKERESÉS  |  %s' % title, 'Forrásoldalak előkészítése...')
     cancelled = False
     total_adapters = len(ADAPTERS)
-    try:
-        for index, adapter in enumerate(ADAPTERS):
-            if progress.iscanceled():
-                cancelled = True
-                break
-            update_source_progress(
-                progress, int(25 * index / max(1, total_adapters)),
-                adapter.name, index, total_adapters, counts, 'FORRÁSKERESÉS'
-            )
+    def search_one(adapter):
+        with timed('adapter search %s' % adapter.name):
             try:
-                records.extend(adapter.search(title) or [])
-            except Exception as exc:
-                errors.append('%s: %s' % (adapter.name, exc))
-                xbmc.log('%s adapter search failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
-            update_source_progress(
-                progress, int(25 * (index + 1) / max(1, total_adapters)),
-                adapter.name, index + 1, total_adapters, counts, 'FORRÁSKERESÉS'
-            )
+                return adapter, adapter.search(title) or [], None
+            except Exception as exc:  # noqa: BLE001
+                return adapter, [], exc
+    try:
+        update_source_progress(progress, 5, 'minden forrás', 0, total_adapters, counts, 'FORRÁSKERESÉS')
+        done = 0
+        pool = ThreadPoolExecutor(max_workers=max(1, total_adapters))
+        try:
+            futures = [pool.submit(search_one, adapter) for adapter in ADAPTERS]
+            pending = set(futures)
+            while pending and not cancelled:
+                finished = {f for f in pending if f.done()}
+                pending -= finished
+                for fut in finished:
+                    adapter, found, exc = fut.result()
+                    done += 1
+                    if exc is not None:
+                        errors.append('%s: %s' % (adapter.name, exc))
+                        xbmc.log('%s adapter search failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
+                    update_source_progress(
+                        progress, int(25 * done / max(1, total_adapters)),
+                        adapter.name, done, total_adapters, counts, 'FORRÁSKERESÉS'
+                    )
+                if progress.iscanceled():
+                    cancelled = True
+                elif pending:
+                    time.sleep(0.1)
+            for fut in futures:     # keep adapter order stable
+                if fut.done():
+                    records.extend(fut.result()[1])
+        finally:
+            _stop_pool(pool)
     except Exception as exc:
         errors.append('Adapter keresés: %s' % exc)
         xbmc.log('%s progress/search error: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
@@ -294,37 +353,59 @@ def add_adapter_hosts(title, path):
         tasks = [(movie, by_id.get(movie.get('adapter_id'))) for movie in group.get('movies', [])]
         tasks = [(movie, adapter) for movie, adapter in tasks if adapter]
         seen = set()
-        try:
-            for index, (movie, adapter) in enumerate(tasks):
-                if progress.iscanceled():
-                    cancelled = True
-                    break
-                update_source_progress(
-                    progress, 25 + int(75 * index / max(1, len(tasks))), adapter.name,
-                    index, len(tasks), counts, 'HOSTOK KIOLVASÁSA'
-                )
+
+        def sources_one(movie, adapter):
+            with timed('adapter sources %s' % adapter.name):
                 try:
                     found = adapter.sources(movie) or []
-                    accepted = []
                     for source in found:
                         source['adapter_name'] = source.get('adapter_name') or adapter.name
-                        key = (
-                            source['adapter_name'], str(source.get('host', '')).casefold(),
-                            str(source.get('quality', '')).casefold(), str(source.get('language', '')).casefold(),
-                            str(source.get('source_url') or source.get('source_page_url') or source.get('play_url', '')).casefold()
+                    return adapter, found, None
+                except Exception as exc:  # noqa: BLE001
+                    return adapter, [], exc
+        try:
+            pool = ThreadPoolExecutor(max_workers=max(1, len(tasks)))
+            try:
+                futures = [pool.submit(sources_one, movie, adapter) for movie, adapter in tasks]
+                pending, done = set(futures), 0
+                while pending and not cancelled:
+                    finished = {f for f in pending if f.done()}
+                    pending -= finished
+                    for fut in finished:
+                        done += 1
+                        update_source_progress(
+                            progress, 25 + int(75 * done / max(1, len(tasks))), fut.result()[0].name,
+                            done, len(tasks), counts, 'HOSTOK KIOLVASÁSA'
                         )
+                    if progress.iscanceled():
+                        cancelled = True
+                    elif pending:
+                        time.sleep(0.1)
+                for fut in futures:     # adapter order stays stable
+                    if not fut.done():
+                        continue
+                    adapter, found, exc = fut.result()
+                    if exc is not None:
+                        errors.append('%s: %s' % (adapter.name, exc))
+                        xbmc.log('%s source listing failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
+                        continue
+                    accepted = []
+                    for source in found:
+                        if source.get('source_url') and not source.get('parent_resolve_only'):
+                            key = ('embed', str(source['source_url']).casefold())   # same embed from two adapters: one row
+                        else:
+                            key = (
+                                source['adapter_name'], str(source.get('host', '')).casefold(),
+                                str(source.get('quality', '')).casefold(), str(source.get('language', '')).casefold(),
+                                str(source.get('source_url') or source.get('source_page_url') or source.get('play_url', '')).casefold()
+                            )
                         if key not in seen:
                             seen.add(key)
                             sources.append(source)
                             accepted.append(source)
                     add_quality_counts(counts, accepted)
-                except Exception as exc:
-                    errors.append('%s: %s' % (adapter.name, exc))
-                    xbmc.log('%s source listing failed: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
-                update_source_progress(
-                    progress, 25 + int(75 * (index + 1) / max(1, len(tasks))), adapter.name,
-                    index + 1, len(tasks), counts, 'HOSTOK KIOLVASÁSA'
-                )
+            finally:
+                _stop_pool(pool)
         except Exception as exc:
             errors.append('Forráslista: %s' % exc)
             xbmc.log('%s progress/source error: %s' % (ADDON_ID, exc), xbmc.LOGWARNING)
@@ -338,6 +419,39 @@ def add_adapter_hosts(title, path):
     return render_host_rows(title, sources, cancelled, errors)
 
 
+_SUPPORT = None
+SUPPORT_TTL = 7 * 24 * 3600
+
+
+def _support_path():
+    profile = xbmcvfs.translatePath(ADDON.getAddonInfo('profile'))
+    xbmcvfs.mkdirs(profile)
+    return os.path.join(profile, 'host_support.json')
+
+
+def _support_cache():
+    """{domain: bool} remembered for a week, so the resolver module need not be imported to list hosts."""
+    global _SUPPORT
+    if _SUPPORT is None:
+        _SUPPORT = {}
+        try:
+            path = _support_path()
+            if os.path.exists(path) and time.time() - os.path.getmtime(path) < SUPPORT_TTL:
+                with open(path, 'r', encoding='utf-8') as fh:
+                    _SUPPORT = dict(json.load(fh))
+        except Exception:  # noqa: BLE001
+            _SUPPORT = {}
+    return _SUPPORT
+
+
+def _support_cache_save():
+    try:
+        with open(_support_path(), 'w', encoding='utf-8') as fh:
+            json.dump(_SUPPORT, fh)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def resolver_supports(source):
     """False only for a row whose embed link is known and resolveurl has no resolver for it.
     Rows that still need an embed lookup (parent_resolve_only), direct streams and raw players are kept."""
@@ -345,12 +459,19 @@ def resolver_supports(source):
     if (not url or source.get('parent_resolve_only') or source.get('direct_stream')
             or source.get('allow_raw_source') or not url.startswith(('http://', 'https://'))):
         return True
-    if resolveurl is None:
+    domain = urlparse(url).netloc.lower()
+    known = _support_cache()
+    if domain in known:
+        return known[domain]
+    if not resolveurl:
         return True
     try:
-        return bool(resolveurl.HostedMediaFile(url).valid_url())
+        ok = bool(resolveurl.HostedMediaFile(url).valid_url())
     except Exception:  # noqa: BLE001 - a resolver bug must not hide the row
         return True
+    known[domain] = ok
+    _support_cache_save()
+    return ok
 
 
 def render_host_rows(title, sources, cancelled=False, errors=None):
@@ -360,7 +481,7 @@ def render_host_rows(title, sources, cancelled=False, errors=None):
         only = ADDON.getSettingBool('only_resolvable')
     except Exception:  # noqa: BLE001
         only = False
-    if only and resolveurl is not None:
+    if only:
         kept = [src for src in sources if resolver_supports(src)]
         hidden, sources = len(sources) - len(kept), kept
     sources = sorted(sources, key=source_quality_sort_key)
@@ -388,9 +509,9 @@ def render_host_rows(title, sources, cancelled=False, errors=None):
         quality = re.sub(r'\[/?COLOR[^\]]*\]', '', str(source.get('quality', '') or 'N/A'), flags=re.I)
         language = re.sub(r'\[/?COLOR[^\]]*\]', '', str(source.get('language', '') or 'N/A'), flags=re.I)
         label = (
-            '[COLOR FFFD9B58]%s[/COLOR]  |  [COLOR FFE6ECF2]%s[/COLOR]  |  '
+            '[COLOR %s][B]%s[/B][/COLOR]  |  [COLOR FFE6ECF2]%s[/COLOR]  |  '
             '[COLOR FFD9B15F]%s[/COLOR]  |  [COLOR FFBCA8E8]%s[/COLOR]'
-        ) % (quality, host, provider, language)
+        ) % (quality_color(quality), quality, host, provider, language)
         item = xbmcgui.ListItem(label=label)
         info = {'title': title, 'mediatype': 'movie'}
         if META.get('plot'):
@@ -515,31 +636,59 @@ def play_sources(token, start_index):
             if source_url and source.get('direct_stream') and source_url.startswith(('http://', 'https://')):
                 stream = source_url
             elif source_url and (zidervisionurlresolver or resolveurl):
-                if zidervisionurlresolver:
+                # every resolver gets its chance: a stream one of them returns may still be refused (403)
+                soft_stream = ''
+                for resolver_name in ('zidervision', 'resolveurl'):
+                    candidate = ''
                     try:
-                        stream = resolved_stream_url(run_limited(lambda: zidervisionurlresolver.resolve(source_url), progress))
-                    except Exception as exc:
-                        xbmc.log('%s ZiderVision resolver failed at row %d (%s / %s): %s' % (ADDON_ID, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
+                        if resolver_name == 'zidervision' and zidervisionurlresolver:
+                            candidate = resolved_stream_url(run_limited(lambda: zidervisionurlresolver.resolve(source_url), progress))
+                        elif resolver_name == 'resolveurl' and resolveurl:
+                            media = resolveurl.HostedMediaFile(source_url)
+                            try:    # ResolveURL's own link test dies on slow CDNs (17 s timeout) although the stream plays
+                                # newer ResolveURL: returns (status, mimetype); older: a bool
+                                media._HostedMediaFile__test_stream = lambda stream_url: (True, 'video/mp4')
+                            except Exception:  # noqa: BLE001
+                                pass
+                            if media and media.valid_url():
+                                try:
+                                    candidate = resolved_stream_url(run_limited(media.resolve, progress))
+                                except (TypeError, ValueError):     # the skipped link test had another shape: stock one
+                                    media = resolveurl.HostedMediaFile(source_url)
+                                    candidate = resolved_stream_url(run_limited(media.resolve, progress))
+                    except Exception as exc:  # noqa: BLE001
+                        xbmc.log('%s %s failed at row %d (%s / %s): %s' % (ADDON_ID, resolver_name, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
                         if is_network_failure(exc):
                             dead_hosts.add(row_domain)
-                if not stream and resolveurl:
+                        candidate = ''
+                    if not candidate:
+                        continue
                     try:
-                        media = resolveurl.HostedMediaFile(source_url)
-                        stream = resolved_stream_url(run_limited(media.resolve, progress)) if media and media.valid_url() else ''
-                    except Exception as exc:
-                        xbmc.log('%s ResolveURL failed at row %d (%s / %s): %s' % (ADDON_ID, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
-                        if is_network_failure(exc):
-                            dead_hosts.add(row_domain)
-                        stream = ''
+                        usable = run_limited(lambda: stream_is_available(candidate), progress, 12)
+                    except Exception:  # noqa: BLE001 - timeout / cancel
+                        usable = False
+                    if usable is True:
+                        stream = candidate
+                        break
+                    if usable == 'refused' and not soft_stream:
+                        soft_stream = candidate     # kept as a last resort: a 403 to our probe is not proof
+                    xbmc.log('%s %s stream not usable at row %d (%s / %s); trying next resolver' % (ADDON_ID, resolver_name, index + 1, adapter_name, host), xbmc.LOGINFO)
+                if not stream and soft_stream:
+                    stream = soft_stream
+                    xbmc.log('%s row %d (%s / %s): every probe was refused, handing the stream to the player anyway' % (ADDON_ID, index + 1, adapter_name, host), xbmc.LOGINFO)
             elif source_url and source.get('allow_raw_source') and source_url.startswith(('http://', 'https://')):
                 # FilmDepo's supplied addon also passes the player URL through unchanged
                 # when ResolveURL is not installed; availability checking still guards it.
                 stream = source_url
             if stream:
-                try:
-                    available = run_limited(lambda: stream_is_available(stream), progress, 12)
-                except Exception:  # noqa: BLE001 - timeout / cancel: treat as unavailable
-                    available = False
+                if source_url and not source.get('direct_stream') and (zidervisionurlresolver or resolveurl) and not (
+                        source.get('allow_raw_source') and stream == source_url):
+                    available = True        # a resolver's stream was verified above
+                else:
+                    try:
+                        available = run_limited(lambda: stream_is_available(stream), progress, 12) is True
+                    except Exception:  # noqa: BLE001 - timeout / cancel: treat as unavailable
+                        available = False
                 if available:
                     xbmc.log('%s resolved row %d (%s / %s)' % (ADDON_ID, index + 1, adapter_name, host), xbmc.LOGINFO)
                     progress.update(100, '[COLOR FF55C7C2]Forrás használható - lejátszás indítása:[/COLOR] [COLOR FFD9B15F]%s[/COLOR]' % host)
@@ -582,6 +731,14 @@ def play_sources(token, start_index):
 
 
 RESOLVE_TIMEOUT = 25   # seconds a single host may block (embed fetch / resolver) before the next row is tried
+
+
+def _stop_pool(pool):
+    """Do not wait for stuck workers (Kodi's Python may be older than 3.9: no cancel_futures)."""
+    try:
+        pool.shutdown(wait=False, cancel_futures=True)
+    except TypeError:
+        pool.shutdown(wait=False)
 
 
 class RowCancelled(Exception):
@@ -638,8 +795,11 @@ def stream_is_available(url):
             response.read(1)
             return True
     except HTTPError as exc:
-        return exc.code == 416
+        # a refusal (401/403/404/410) is final; a slow CDN or a 5xx may still play in Kodi
+        if exc.code in (401, 403):
+            return 'refused'     # the probe was refused; Kodi's own request (other headers) may still work
+        return exc.code not in (404, 410)
     except (URLError, TimeoutError, OSError, ValueError):
-        return False
+        return True     # no answer in time is not proof of a dead stream: let the player try
 
 

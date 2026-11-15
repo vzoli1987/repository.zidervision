@@ -9,6 +9,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from .perf import timed
+
 UA = 'Mozilla/5.0 (Kodi; plugin.video.mafab/0.2.0) AppleWebKit/537.36'
 CHALLENGE_MARKERS = (
     'cf-chl-captcha-container', 'cf-chl-widget', 'Just a moment...',
@@ -26,9 +28,10 @@ def get(url, headers=None, timeout=15):
         request_headers.update(headers)
     request = Request(url, headers=request_headers)
     try:
-        with urlopen(request, timeout=timeout) as response:
-            body = response.read().decode('utf-8', 'replace')
-            final_url = response.geturl()
+        with timed('GET %s' % url[:90]):
+            with urlopen(request, timeout=timeout) as response:
+                body = response.read().decode('utf-8', 'replace')
+                final_url = response.geturl()
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         raise SourceUnavailable(str(exc))
     if any(marker.lower() in body.lower() for marker in CHALLENGE_MARKERS):

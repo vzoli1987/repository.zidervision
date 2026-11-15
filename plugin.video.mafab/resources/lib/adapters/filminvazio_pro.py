@@ -4,6 +4,7 @@ from __future__ import absolute_import
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import urlencode, urljoin, urlparse
@@ -128,8 +129,9 @@ class FilminvazioProAdapter(Adapter):
             table_html, _ = get(mirror_url, headers={'Referer': BASE})
             table = Rows()
             table.feed(table_html)
-            for row in table.rows:
-                target = self._final_url(row['url'])
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                finals = list(pool.map(lambda r: self._final_url(r['url']), table.rows))
+            for row, target in zip(table.rows, finals):
                 if not target or target in seen:
                     continue
                 seen.add(target)
@@ -141,8 +143,9 @@ class FilminvazioProAdapter(Adapter):
             pass
         media = Media()
         media.feed(body)
-        for raw in media.urls:
-            target = self._final_url(raw)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            media_finals = list(pool.map(self._final_url, media.urls))
+        for raw, target in zip(media.urls, media_finals):
             if not target or target in seen or 'youtube.com' in urlparse(target).netloc.lower():
                 continue
             seen.add(target)

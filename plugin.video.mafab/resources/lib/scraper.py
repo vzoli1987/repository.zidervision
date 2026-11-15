@@ -16,6 +16,8 @@ from urllib.parse import quote_plus, urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
+from .perf import timed
+
 # ----------------------------------------------------------------- CONFIG --
 BASE = 'https://www.mafab.hu/'
 
@@ -201,10 +203,23 @@ def decode_body(resp):
     return raw.decode('utf-8', 'replace')
 
 
+_STRIP_RE = re.compile(
+    r'<script\b(?![^>]*ld\+json)[^>]*>.*?</script\s*>|<style\b[^>]*>.*?</style\s*>|<noscript\b[^>]*>.*?</noscript\s*>|'
+    r'<svg\b[^>]*>.*?</svg\s*>|<!--.*?-->|<iframe\b[^>]*>.*?</iframe\s*>', re.I | re.S)
+
+
+def make_soup(html):
+    """BeautifulSoup over the markup that matters: scripts, styles, svg and comments (ads, trackers,
+    icons) are cut out first - they are most of a page and html.parser is slow on a phone."""
+    with timed('parse %d KB' % (len(html or '') // 1024), 80):
+        return BeautifulSoup(_STRIP_RE.sub('', html or ''), 'html.parser')
+
+
 class Scraper(object):
     def __init__(self, cache_dir=None, ttl_hours=6, debug=False, log=None):
         self.cache_dir = cache_dir
         self.last_search_people = []
+        self._soups = {}
         self.ttl = int(ttl_hours) * 3600
         self.debug = debug
         self.log = log or (lambda msg: None)
@@ -226,7 +241,8 @@ class Scraper(object):
                     return fh.read()
         self.log('GET %s' % url)
         try:
-            resp = self.session.get(url, timeout=20)
+            with timed('mafab GET %s' % url[:80]):
+                resp = self.session.get(url, timeout=20)
             resp.raise_for_status()
         except requests.RequestException as exc:
             raise ScrapeError(str(exc))
@@ -244,11 +260,44 @@ class Scraper(object):
         return html
 
     def get_soup(self, url):
-        return BeautifulSoup(self.get_html(url), 'html.parser')
+        soup = self._soups.get(url)
+        if soup is None:
+            soup = self._soups[url] = make_soup(self.get_html(url))
+        return soup
 
     # -------------------------------------------------------------- menu --
     def discover_menu(self):
         """Return [(label, url, kind)] for known menu labels found on the home page."""
+        cached = self._menu_cached()
+        if cached is not None:
+            return cached
+        menu = self._discover_menu()
+        self._menu_store(menu)
+        return menu
+
+    def _menu_file(self):
+        return os.path.join(self.cache_dir, 'menu.json') if self.cache_dir else None
+
+    def _menu_cached(self):
+        path = self._menu_file()
+        try:
+            if path and os.path.exists(path) and time.time() - os.path.getmtime(path) < 24 * 3600:
+                with open(path, 'r', encoding='utf-8') as fh:
+                    return [tuple(row) for row in json.load(fh)]
+        except (OSError, ValueError):
+            pass
+        return None
+
+    def _menu_store(self, menu):
+        path = self._menu_file()
+        try:
+            if path and menu:
+                with open(path, 'w', encoding='utf-8') as fh:
+                    json.dump(menu, fh)
+        except OSError:
+            pass
+
+    def _discover_menu(self):
         soup = self.get_soup(BASE)
         wanted = {label.lower(): kind for label, kind in MENU_LABELS}
         found = {}
@@ -411,7 +460,7 @@ class Scraper(object):
             if getattr(sib, 'name', None) in ('h2', 'h3'):
                 break
             parts.append(str(sib))
-        mini = BeautifulSoup(''.join(parts), 'html.parser')
+        mini = make_soup(''.join(parts))
         return self.parse_people(mini, base_url)
 
     def parse_items(self, soup, base_url, exclude_sidebar=False):
@@ -564,7 +613,7 @@ class Scraper(object):
 
     def parse_detail(self, url):
         html = self.get_html(url)
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = make_soup(html)
         title = self._meta(soup, 'og:title') or (soup.title.get_text(strip=True) if soup.title else '')
         return {
             'title': title,
@@ -576,7 +625,7 @@ class Scraper(object):
     def resolve(self, url):
         """Return [(label, playable_url)] for a page. YouTube ids use the YouTube add-on."""
         html = self.get_html(url)
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = make_soup(html)
         base = self._meta(soup, 'og:title') or 'Video'
         out = []
         for vid in self.youtube_ids(html):
@@ -645,7 +694,7 @@ class Scraper(object):
     @staticmethod
     def parse_tv_html(html, base_url=BASE):
         """Extract (date, time, channel, title, year, url, thumb) rows from the AJAX fragment."""
-        soup = BeautifulSoup(html or '', 'html.parser')
+        soup = make_soup(html or '')
         rows, seen, current_date = [], set(), ''
 
         def is_movie(tag):
@@ -822,7 +871,7 @@ class Scraper(object):
 
     def parse_meta(self, html, url=BASE):
         """Collect plot, art, genres, people, rating... from a movie/series detail page."""
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = make_soup(html)
         meta = {'plot': '', 'poster': '', 'fanart': '', 'genres': [], 'directors': [],
                 'cast': [], 'rating': None, 'votes': None, 'duration': None,
                 'year': None, 'originaltitle': '', 'mpaa': '',
@@ -1161,7 +1210,7 @@ class Scraper(object):
 
     def parse_person_page(self, html, url):
         """Best effort on a person's own page: bio, photo and the films linked in its main column."""
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = make_soup(html)
         films, seen = [], set()
         for a in soup.find_all('a', href=True):
             href = urljoin(url, a['href'].split('#')[0])

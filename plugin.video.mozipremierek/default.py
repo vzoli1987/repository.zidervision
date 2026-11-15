@@ -9,8 +9,10 @@ import hashlib
 import html
 import json
 import os
+import queue
 import re
 import sys
+import threading
 import time
 import uuid
 from html.parser import HTMLParser
@@ -43,7 +45,10 @@ ADDON_ID = ADDON.getAddonInfo('id')
 BASE = 'https://mozipremierek.hu'
 HANDLE = int(sys.argv[1])
 PLUGIN_BASE = sys.argv[0]
-HOST_CACHE_SCHEMA = 5
+HOST_CACHE_SCHEMA = 8
+BACKGROUND_WORKER_LOCK = threading.Lock()
+BACKGROUND_WORKER_COUNT = 0
+MAX_BACKGROUND_WORKERS = 2
 
 
 def highest_srcset_url(srcset):
@@ -314,7 +319,7 @@ def fetch_page(path):
     # Kodi's Python HTTP client needs percent-encoded non-ASCII genre slugs.
     url = quote(url, safe=":/?&=%#[]@!$'()*+,;")
     request = Request(url, headers={
-        'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.7.8) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.8.3) AppleWebKit/537.36',
         'Accept': 'text/html,application/xhtml+xml'
     })
     try:
@@ -769,6 +774,80 @@ def add_quality_counts(counts, sources):
         counts['Összesen'] += 1
 
 
+def is_resolveurl_supported(url):
+    """Return whether the installed ResolveURL has an enabled matching resolver."""
+    if not resolveurl or not url:
+        return False
+    try:
+        media = resolveurl.HostedMediaFile(url)
+        return bool(media and media.valid_url())
+    except Exception as exc:
+        xbmc.log('%s ResolveURL host check failed for %s: %s' % (ADDON_ID, urlparse(url).netloc, exc), xbmc.LOGDEBUG)
+        return False
+
+
+def blocked_host_domains():
+    """Read comma/space-separated host domains from Kodi addon settings."""
+    raw = ADDON.getSetting('blocked_hosts') or ''
+    domains = set()
+    for entry in re.split(r'[,;\s]+', raw):
+        entry = entry.strip().lower()
+        if not entry:
+            continue
+        if '://' in entry:
+            entry = urlparse(entry).hostname or ''
+        entry = entry.strip().strip('.')
+        if entry.startswith('*.'):
+            entry = entry[2:]
+        if entry.startswith('www.'):
+            entry = entry[4:]
+        if entry:
+            domains.add(entry)
+    return domains
+
+
+def _matches_blocked_host(candidate, blocked):
+    candidate = str(candidate or '').strip()
+    if not candidate:
+        return False
+    if candidate.startswith(('http://', 'https://')):
+        host = urlparse(candidate).hostname or ''
+    else:
+        candidate = re.sub(r'\[/?COLOR[^\]]*\]', '', candidate, flags=re.I)
+        host = candidate.split('/', 1)[0].split('|', 1)[0].split(':', 1)[0]
+    host = host.lower().strip('.')
+    if host.startswith('www.'):
+        host = host[4:]
+    return any(host == domain or host.endswith('.' + domain) for domain in blocked)
+
+
+def source_is_blocked(source, blocked=None):
+    blocked = blocked if blocked is not None else blocked_host_domains()
+    if not blocked:
+        return False
+    return any(_matches_blocked_host(source.get(key, ''), blocked)
+               for key in ('host', 'source_url', 'source_page_url', 'play_url'))
+
+
+def filter_source_records(sources):
+    """Apply user host blacklist and runtime ResolveURL support checks."""
+    visible = []
+    for source in sources or []:
+        if source_is_blocked(source):
+            xbmc.log('%s skipped blacklisted source host=%s' % (ADDON_ID, source.get('host', 'unknown')), xbmc.LOGINFO)
+            continue
+        if source.get('resolveurl_required'):
+            source_url = source.get('source_url', '')
+            if not is_resolveurl_supported(source_url):
+                xbmc.log(
+                    '%s source hidden: no enabled ResolveURL resolver for %s' %
+                    (ADDON_ID, urlparse(source_url).netloc), xbmc.LOGINFO
+                )
+                continue
+        visible.append(source)
+    return visible
+
+
 def update_source_progress(progress, percent, page_name, completed, total, counts, phase):
     percent = max(0, min(100, int(percent)))
     frames = ('[>   ]', '[=>  ]', '[==> ]', '[===>]')
@@ -853,7 +932,7 @@ def add_adapter_hosts(title, path):
     """Automatically search providers on movie open, showing live progress and host rows."""
     cached_sources = load_host_cache(title, path)
     if cached_sources is not None:
-        return render_host_rows(title, cached_sources)
+        return render_host_rows(title, filter_source_records(cached_sources))
 
     records = []
     errors = []
@@ -952,6 +1031,7 @@ def add_adapter_hosts(title, path):
                         break
                     try:
                         found = future.result() or []
+                        found = filter_source_records(found)
                         xbmc.log(
                             '%s PERF source_list adapter=%s elapsed=%.2fs rows=%d' %
                             (ADDON_ID, adapter.adapter_id, time.monotonic() - started_at, len(found)),
@@ -1034,6 +1114,187 @@ def resolved_stream_url(result):
     return ''
 
 
+DEAD_VIDEO_MARKERS = (
+    'video not found', 'file not found', 'video has been removed',
+    'file has been removed', 'video has been deleted', 'file has been deleted',
+    'this video is unavailable', 'this file is no longer available',
+    'requested video is unavailable', 'no such video'
+)
+CLOUDFLARE_MARKERS = ('cf-chl-', 'just a moment...', 'checking your browser', 'attention required! | cloudflare', 'captcha')
+
+
+def probe_source_page(url, timeout=4):
+    """Quickly reject unreachable, deleted, or challenge pages without bypassing them."""
+    if not url or not url.startswith(('http://', 'https://')):
+        return False, 'érvénytelen embed URL'
+    request = Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.8.3)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    })
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            status = response.getcode()
+            body = response.read(8192).decode('utf-8', 'ignore').lower()
+            if status >= 400:
+                return False, 'HTTP %d' % status
+    except HTTPError as exc:
+        return False, 'HTTP %d' % exc.code
+    except (URLError, TimeoutError, OSError, ValueError) as exc:
+        return False, 'kapcsolati hiba/időtúllépés: %s' % exc
+    if any(marker in body for marker in CLOUDFLARE_MARKERS):
+        return False, 'ellenőrző oldal; megkerülést nem végzünk'
+    if any(marker in body for marker in DEAD_VIDEO_MARKERS):
+        return False, 'a videóoldal törölt vagy nem elérhető videót jelez'
+    if not body.strip():
+        return False, 'üres válasz'
+    return True, 'OK'
+
+
+def _probe_source_page_in_worker(source_url, result_queue):
+    global BACKGROUND_WORKER_COUNT
+    try:
+        result = probe_source_page(source_url)
+    except Exception as exc:
+        result = (False, 'ellenőrzési hiba: %s' % exc)
+    finally:
+        with BACKGROUND_WORKER_LOCK:
+            BACKGROUND_WORKER_COUNT = max(0, BACKGROUND_WORKER_COUNT - 1)
+    result_queue.put(result)
+
+
+def probe_source_page_with_timeout(source_url, progress, percent, attempt, total, adapter_name, host, timeout=4):
+    """Probe an embed in the background so a slow host cannot block Kodi's UI thread."""
+    global BACKGROUND_WORKER_COUNT
+    with BACKGROUND_WORKER_LOCK:
+        if BACKGROUND_WORKER_COUNT >= MAX_BACKGROUND_WORKERS:
+            return False, 'korábbi háttérkérés még fut; host átugorva', False
+        BACKGROUND_WORKER_COUNT += 1
+    result_queue = queue.Queue(maxsize=1)
+    worker = threading.Thread(
+        target=_probe_source_page_in_worker, args=(source_url, result_queue),
+        name='MozipremierekEmbedProbe', daemon=True
+    )
+    try:
+        worker.start()
+    except Exception as exc:
+        with BACKGROUND_WORKER_LOCK:
+            BACKGROUND_WORKER_COUNT = max(0, BACKGROUND_WORKER_COUNT - 1)
+        return False, 'az embed ellenőrző szál nem indítható: %s' % exc, False
+    started = time.monotonic()
+    last_second = -1
+    while True:
+        if progress.iscanceled():
+            return False, 'ellenőrzés megszakítva', True
+        elapsed = time.monotonic() - started
+        try:
+            available, reason = result_queue.get(timeout=min(0.25, max(0.01, timeout - elapsed)))
+            return available, reason, False
+        except queue.Empty:
+            elapsed = time.monotonic() - started
+            if elapsed >= timeout:
+                try:
+                    available, reason = result_queue.get_nowait()
+                    return available, reason, False
+                except queue.Empty:
+                    return False, 'embed-ellenőrzés időtúllépés (%d mp)' % timeout, False
+            second = int(elapsed)
+            if second != last_second:
+                last_second = second
+                progress.update(
+                    percent,
+                    '[COLOR FFE6ECF2]Host-próba:[/COLOR] [COLOR FFFF9E64]%d/%d[/COLOR]\n'
+                    '[COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFD9B15F]%s[/COLOR]\n'
+                    '[COLOR FFE6ECF2]Embed elérhetőség ellenőrzése: %d/%d mp[/COLOR]' % (
+                        attempt, total, adapter_name, host, second, timeout
+                    )
+                )
+
+
+def is_unavailable_or_stalled_error(errors):
+    """Do not re-delegate a URL after a definitive missing-link or timeout result."""
+    text = ' '.join(str(error or '') for error in (errors or [])).lower()
+    markers = (
+        'video link not found', 'video not found', 'file not found', 'link not found',
+        'removed', 'deleted', 'unavailable', 'no longer available', '404', '410',
+        'timeout', 'timed out', 'időtúllépés', 'cloudflare', 'captcha', 'verification'
+    )
+    return any(marker in text for marker in markers)
+
+
+def _resolve_source_in_worker(source_url, result_queue):
+    global BACKGROUND_WORKER_COUNT
+    errors = []
+    stream = ''
+    try:
+        if zidervisionurlresolver:
+            try:
+                stream = resolved_stream_url(zidervisionurlresolver.resolve(source_url))
+            except Exception as exc:
+                errors.append('ZiDERViSiON: %s' % exc)
+        if not stream and resolveurl:
+            try:
+                media = resolveurl.HostedMediaFile(source_url)
+                if media and media.valid_url():
+                    stream = resolved_stream_url(media.resolve())
+            except Exception as exc:
+                errors.append('ResolveURL: %s' % exc)
+        result = (stream, errors)
+    except Exception as exc:
+        result = ('', errors + ['feloldó hiba: %s' % exc])
+    finally:
+        with BACKGROUND_WORKER_LOCK:
+            BACKGROUND_WORKER_COUNT = max(0, BACKGROUND_WORKER_COUNT - 1)
+    result_queue.put(result)
+
+
+def resolve_source_with_timeout(source_url, progress, percent, attempt, total, adapter_name, host, timeout=15):
+    """Run resolver network work off the UI path, updating/canceling progress while waiting."""
+    global BACKGROUND_WORKER_COUNT
+    with BACKGROUND_WORKER_LOCK:
+        if BACKGROUND_WORKER_COUNT >= MAX_BACKGROUND_WORKERS:
+            return '', False, ['Korábbi feloldás még fut; ezt a hostot átugrom']
+        BACKGROUND_WORKER_COUNT += 1
+    result_queue = queue.Queue(maxsize=1)
+    worker = threading.Thread(
+        target=_resolve_source_in_worker, args=(source_url, result_queue),
+        name='MozipremierekResolver', daemon=True
+    )
+    try:
+        worker.start()
+    except Exception as exc:
+        with BACKGROUND_WORKER_LOCK:
+            BACKGROUND_WORKER_COUNT = max(0, BACKGROUND_WORKER_COUNT - 1)
+        return '', False, ['A resolver szál nem indítható: %s' % exc]
+    started = time.monotonic()
+    last_second = -1
+    while True:
+        if progress.iscanceled():
+            return '', True, []
+        elapsed = time.monotonic() - started
+        try:
+            stream, errors = result_queue.get(timeout=min(0.25, max(0.01, timeout - elapsed)))
+            return stream, False, errors
+        except queue.Empty:
+            elapsed = time.monotonic() - started
+            if elapsed >= timeout:
+                try:
+                    stream, errors = result_queue.get_nowait()
+                    return stream, False, errors
+                except queue.Empty:
+                    return '', False, ['ResolveURL időtúllépés (%d mp)' % timeout]
+            second = int(elapsed)
+            if second != last_second:
+                last_second = second
+                progress.update(
+                    percent,
+                    '[COLOR FFE6ECF2]Host-próba:[/COLOR] [COLOR FFFF9E64]%d/%d[/COLOR]\n'
+                    '[COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFD9B15F]%s[/COLOR]\n'
+                    '[COLOR FFE6ECF2]Resolver dolgozik: %d/%d mp; megszakítás a Mégsem gombbal[/COLOR]' % (
+                        attempt, total, adapter_name, host, second, timeout
+                    )
+                )
+
+
 def play_sources(token, start_index):
     """Start with the clicked row, then move to later rows only on a resolve failure."""
     queue = load_source_queue(token)
@@ -1063,6 +1324,9 @@ def play_sources(token, start_index):
                 break
             source = sources[index]
             host = str(source.get('host', 'ismeretlen host'))
+            if source_is_blocked(source):
+                xbmc.log('%s skipped blacklisted playback host=%s' % (ADDON_ID, host), xbmc.LOGINFO)
+                continue
             adapter_name = str(source.get('adapter_name', 'forrás'))
             source_url = source.get('source_url', '')
             percent = int(offset * 100 / max(1, remaining))
@@ -1098,6 +1362,8 @@ def play_sources(token, start_index):
                             '[COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFD9B15F]%s[/COLOR]\n'
                             '[COLOR FFFF7777]%s[/COLOR]' % (offset + 1, remaining, adapter_name, host, status)
                         )
+                        if is_unavailable_or_stalled_error([error_text]):
+                            continue
                         if source.get('parent_resolve_only'):
                             continue
                     if source_url:
@@ -1121,22 +1387,67 @@ def play_sources(token, start_index):
                             )
                         )
                         continue
+            if source_url and not source.get('direct_stream'):
+                progress.update(
+                    percent,
+                    '[COLOR FFE6ECF2]Host-próba:[/COLOR] [COLOR FFFF9E64]%d/%d[/COLOR]\n'
+                    '[COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFD9B15F]%s[/COLOR]\n'
+                    '[COLOR FFE6ECF2]Embed gyors elérhetőség-ellenőrzése...[/COLOR]' % (
+                        offset + 1, remaining, adapter_name, host
+                    )
+                )
+                page_available, page_reason, probe_cancelled = probe_source_page_with_timeout(
+                    source_url, progress, percent, offset + 1, remaining,
+                    adapter_name, host, timeout=4
+                )
+                if probe_cancelled:
+                    cancelled = True
+                    break
+                if not page_available:
+                    xbmc.log(
+                        '%s skipped unavailable embed at row %d (%s / %s): %s' %
+                        (ADDON_ID, index + 1, adapter_name, host, page_reason), xbmc.LOGINFO
+                    )
+                    progress.update(
+                        percent,
+                        '[COLOR FFE6ECF2]Host-próba:[/COLOR] [COLOR FFFF9E64]%d/%d[/COLOR]\n'
+                        '[COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFD9B15F]%s[/COLOR]\n'
+                        '[COLOR FFFF7777]%s; következő host...[/COLOR]' % (
+                            offset + 1, remaining, adapter_name, host, page_reason
+                        )
+                    )
+                    continue
             stream = ''
             if source_url and source.get('direct_stream') and source_url.startswith(('http://', 'https://')):
                 stream = source_url
             elif source_url and (zidervisionurlresolver or resolveurl):
-                if zidervisionurlresolver:
-                    try:
-                        stream = resolved_stream_url(zidervisionurlresolver.resolve(source_url))
-                    except Exception as exc:
-                        xbmc.log('%s ZiderVision resolver failed at row %d (%s / %s): %s' % (ADDON_ID, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
-                if not stream and resolveurl:
-                    try:
-                        media = resolveurl.HostedMediaFile(source_url)
-                        stream = resolved_stream_url(media.resolve()) if media and media.valid_url() else ''
-                    except Exception as exc:
-                        xbmc.log('%s ResolveURL failed at row %d (%s / %s): %s' % (ADDON_ID, index + 1, adapter_name, host, exc), xbmc.LOGWARNING)
-                        stream = ''
+                stream, resolver_cancelled, resolver_errors = resolve_source_with_timeout(
+                    source_url, progress, percent, offset + 1, remaining,
+                    adapter_name, host, timeout=15
+                )
+                if resolver_cancelled:
+                    cancelled = True
+                    break
+                for error in resolver_errors:
+                    xbmc.log(
+                        '%s resolver failed at row %d (%s / %s): %s' %
+                        (ADDON_ID, index + 1, adapter_name, host, error), xbmc.LOGWARNING
+                    )
+                if not stream and resolver_errors:
+                    progress.update(
+                        percent,
+                        '[COLOR FFE6ECF2]Host-próba:[/COLOR] [COLOR FFFF9E64]%d/%d[/COLOR]\n'
+                        '[COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFD9B15F]%s[/COLOR]\n'
+                        '[COLOR FFFF7777]%s; következő host...[/COLOR]' % (
+                            offset + 1, remaining, adapter_name, host, resolver_errors[-1]
+                        )
+                    )
+                    if is_unavailable_or_stalled_error(resolver_errors):
+                        xbmc.log(
+                            '%s will not delegate failed direct URL at row %d to source addon: definitive missing/stalled link' %
+                            (ADDON_ID, index + 1), xbmc.LOGINFO
+                        )
+                        continue
             elif source_url and source.get('allow_raw_source') and source_url.startswith(('http://', 'https://')):
                 # FilmDepo's supplied addon also passes the player URL through unchanged
                 # when ResolveURL is not installed; availability checking still guards it.
@@ -1151,6 +1462,15 @@ def play_sources(token, start_index):
                     xbmcplugin.setResolvedUrl(HANDLE, True, item)
                     return
                 xbmc.log('%s resolved stream unavailable at row %d (%s / %s); continuing' % (ADDON_ID, index + 1, adapter_name, host), xbmc.LOGINFO)
+                progress.update(
+                    percent,
+                    '[COLOR FFE6ECF2]Host-próba:[/COLOR] [COLOR FFFF9E64]%d/%d[/COLOR]\n'
+                    '[COLOR FF72D5C9]%s[/COLOR]  |  [COLOR FFD9B15F]%s[/COLOR]\n'
+                    '[COLOR FFFF7777]A feloldott stream nem elérhető; következő host...[/COLOR]' % (
+                        offset + 1, remaining, adapter_name, host
+                    )
+                )
+                continue
             if source_url:
                 xbmc.log('%s direct source unavailable at row %d (%s / %s); continuing' % (ADDON_ID, index + 1, adapter_name, host), xbmc.LOGINFO)
                 if source.get('parent_resolve_only') and (source.get('direct_stream') or source.get('allow_raw_source') or zidervisionurlresolver or resolveurl):
@@ -1180,25 +1500,37 @@ def play_sources(token, start_index):
 
 
 def stream_is_available(url):
-    """Lightweight availability check so a dead resolved link is skipped before playback."""
+    """Validate status, payload markers and HLS header before handing a stream to Kodi."""
     target = url
-    headers = {'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.7.8)', 'Range': 'bytes=0-0'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Kodi; plugin.video.mozipremierek/1.8.3)', 'Range': 'bytes=0-8191'}
     if '|' in url:
         target, raw_headers = url.split('|', 1)
         for key, values in parse_qs(raw_headers, keep_blank_values=True).items():
             if values:
                 headers[key] = values[-1]
-        headers['Range'] = 'bytes=0-0'
+        headers['Range'] = 'bytes=0-8191'
     request = Request(target, headers=headers)
     try:
         with urlopen(request, timeout=5) as response:
             content_type = response.headers.get('Content-Type', '').lower()
-            if response.getcode() >= 400 or 'text/html' in content_type:
+            if response.getcode() >= 400:
                 return False
-            response.read(1)
+            sample = response.read(8192)
+            if not sample:
+                return False
+            text = sample.decode('utf-8', 'ignore').lower().lstrip('\ufeff \r\n\t')
+            if any(marker in text for marker in DEAD_VIDEO_MARKERS):
+                return False
+            is_hls = 'mpegurl' in content_type or target.split('?', 1)[0].lower().endswith('.m3u8')
+            if is_hls:
+                return '#extm3u' in text
+            if any(marker in content_type for marker in ('text/html', 'application/json', 'text/plain')):
+                return False
+            if text.startswith(('<!doctype html', '<html', '{')):
+                return False
             return True
     except HTTPError as exc:
-        return exc.code == 416
+        return False
     except (URLError, TimeoutError, OSError, ValueError):
         return False
 
